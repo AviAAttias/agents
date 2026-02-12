@@ -1,0 +1,6 @@
+apiVersion: v2
+name: financial-pipeline
+description: Financial multi-agent pipeline services (excluding Conductor)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

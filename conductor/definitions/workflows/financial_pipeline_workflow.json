@@ -1,0 +1,32 @@
+[
+  {
+    "name": "financial_pipeline",
+    "description": "PDF financial extraction and approval pipeline",
+    "version": 1,
+    "schemaVersion": 2,
+    "restartable": true,
+    "ownerEmail": "platform@example.com",
+    "inputParameters": ["jobId", "pdfUrl", "requesterEmail"],
+    "tasks": [
+      {"name":"ingest_pdf","taskReferenceName":"ingest_pdf","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","pdfUrl":"${workflow.input.pdfUrl}"}},
+      {"name":"extract_text","taskReferenceName":"extract_text","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","artifact":"${ingest_pdf.output.artifactRef}"}},
+      {"name":"classify_doc","taskReferenceName":"classify_doc","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","textArtifact":"${extract_text.output.artifactRef}"}},
+      {"name":"extract_financials","taskReferenceName":"extract_financials","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","docType":"${classify_doc.output.documentType}","text":"${extract_text.output.text}"}},
+      {"name":"validate_reconcile","taskReferenceName":"validate_reconcile","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","financialArtifact":"${extract_financials.output.artifactRef}"}},
+      {"name":"generate_report","taskReferenceName":"generate_report","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","validationArtifact":"${validate_reconcile.output.artifactRef}"}},
+      {"name":"request_approval","taskReferenceName":"request_approval","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","reportArtifact":"${generate_report.output.artifactRef}"}},
+      {"name":"wait_for_approval","taskReferenceName":"wait_for_approval","type":"EVENT","sink":"approval.${workflow.input.jobId}","inputParameters":{}},
+      {
+        "name":"approved_decision",
+        "taskReferenceName":"approved_decision",
+        "type":"SWITCH",
+        "evaluatorType":"value-param",
+        "expression":"${wait_for_approval.output.decision}",
+        "decisionCases":{
+          "APPROVED":[{"name":"send_email","taskReferenceName":"send_email","type":"SIMPLE","inputParameters":{"jobId":"${workflow.input.jobId}","recipient":"${workflow.input.requesterEmail}","reportArtifact":"${generate_report.output.artifactRef}"}}]
+        },
+        "defaultCase":[]
+      }
+    ]
+  }
+]
