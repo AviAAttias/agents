@@ -1,0 +1,12 @@
+image:
+  repository: financial-pipeline
+  tag: latest
+services:
+  - name: pdf-ingestion-service
+  - name: text-extraction-worker
+  - name: classification-worker
+  - name: financial-extraction-worker
+  - name: reconciliation-worker
+  - name: reporting-worker
+  - name: approval-service
+  - name: notification-worker

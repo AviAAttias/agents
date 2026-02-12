@@ -1,0 +1,10 @@
+[
+  {"name":"ingest_pdf","description":"Persist incoming PDF metadata and blob location","retryCount":3,"timeoutSeconds":120,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"extract_text","description":"Run OCR/text extraction worker","retryCount":3,"timeoutSeconds":180,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"classify_doc","description":"Classify extracted text","retryCount":3,"timeoutSeconds":120,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"extract_financials","description":"Extract financial fields","retryCount":3,"timeoutSeconds":180,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"validate_reconcile","description":"Validate and reconcile financial values","retryCount":3,"timeoutSeconds":120,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"generate_report","description":"Produce summarized report artifact","retryCount":3,"timeoutSeconds":120,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"request_approval","description":"Create reviewer approval request","retryCount":3,"timeoutSeconds":120,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"},
+  {"name":"send_email","description":"Send approval notification email","retryCount":3,"timeoutSeconds":120,"retryLogic":"FIXED","retryDelaySeconds":5,"ownerEmail":"platform@example.com"}
+]
