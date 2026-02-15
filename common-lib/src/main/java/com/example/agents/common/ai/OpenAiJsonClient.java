@@ -17,8 +17,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.MessageDigest;
@@ -26,6 +28,7 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 
 @Slf4j
 @Component
@@ -68,14 +71,15 @@ public class OpenAiJsonClient {
 
     public OpenAiJsonResponse completeJson(OpenAiJsonRequest request) {
         if (request.getJsonSchema() == null || request.getSchemaName() == null || request.getSchemaName().isBlank()) {
-            throw new OpenAiJsonClientException(OpenAiErrorCode.AUTH_CONFIG, "jsonSchema and schemaName are required");
+            throw new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "jsonSchema and schemaName are required");
         }
         if (apiKey == null || apiKey.isBlank()) {
             throw new OpenAiJsonClientException(OpenAiErrorCode.DISABLED, "OpenAI API key is missing");
         }
 
         long startNanos = System.nanoTime();
-        String requestId = request.getRequestId() == null || request.getRequestId().isBlank()
+
+        String requestId = (request.getRequestId() == null || request.getRequestId().isBlank())
                 ? UUID.randomUUID().toString()
                 : request.getRequestId();
 
@@ -84,19 +88,20 @@ public class OpenAiJsonClient {
 
         String originalPrompt = request.getUserPrompt() == null ? "" : request.getUserPrompt();
         boolean inputTruncated = originalPrompt.length() > maxInputChars;
-        String boundedPrompt = inputTruncated ? originalPrompt.substring(0, maxInputChars) + "\n...[TRUNCATED]" : originalPrompt;
+        String boundedPrompt = inputTruncated
+                ? originalPrompt.substring(0, maxInputChars) + "\n...[TRUNCATED]"
+                : originalPrompt;
 
         OpenAiJsonClientException terminal = null;
-        int attempts = Math.max(1, maxAttempts);
-
-        // Capture model output (if any) for failure logging; avoids out-of-scope access + NPEs.
         String lastRawContentText = null;
+
+        int attempts = Math.max(1, maxAttempts);
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
                 long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
-                long remaining = overallDeadlineMs - elapsedMs;
-                if (remaining <= 0) {
+                long remainingMs = overallDeadlineMs - elapsedMs;
+                if (remainingMs <= 0) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI overall deadline exceeded");
                 }
 
@@ -109,8 +114,12 @@ public class OpenAiJsonClient {
                         .put("temperature", 0)
                         .put("max_output_tokens", maxOutputTokens)
                         .set("messages", objectMapper.createArrayNode()
-                                .add(objectMapper.createObjectNode().put("role", "system").put("content", request.getSystemPrompt()))
-                                .add(objectMapper.createObjectNode().put("role", "user").put("content", boundedPrompt)));
+                                .add(objectMapper.createObjectNode()
+                                        .put("role", "system")
+                                        .put("content", request.getSystemPrompt()))
+                                .add(objectMapper.createObjectNode()
+                                        .put("role", "user")
+                                        .put("content", boundedPrompt)));
 
                 requestBody.set("response_format", objectMapper.createObjectNode()
                         .put("type", "json_schema")
@@ -121,7 +130,7 @@ public class OpenAiJsonClient {
 
                 HttpRequest httpRequest = HttpRequest.newBuilder()
                         .uri(URI.create(baseUrl + "/v1/chat/completions"))
-                        .timeout(Duration.ofMillis(Math.min(requestTimeoutMs, remaining)))
+                        .timeout(Duration.ofMillis(Math.min(requestTimeoutMs, remainingMs)))
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                         .header("X-Request-Id", requestId)
@@ -130,17 +139,18 @@ public class OpenAiJsonClient {
 
                 HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
-                if (response.statusCode() == 429) {
+                int sc = response.statusCode();
+                if (sc == 429) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.RATE_LIMIT, "OpenAI rate limit");
                 }
-                if (response.statusCode() == 401 || response.statusCode() == 403) {
+                if (sc == 401 || sc == 403) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.AUTH_CONFIG, "OpenAI auth/config error");
                 }
-                if (response.statusCode() >= 500) {
+                if (sc >= 500) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI upstream 5xx");
                 }
-                if (response.statusCode() / 100 != 2) {
-                    throw new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI non-success status " + response.statusCode());
+                if (sc / 100 != 2) {
+                    throw new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI non-success status " + sc);
                 }
 
                 JsonNode root = objectMapper.readTree(response.body());
@@ -163,7 +173,6 @@ public class OpenAiJsonClient {
                         .getSchema(request.getJsonSchema());
 
                 Set<com.networknt.schema.ValidationMessage> violations = validator.validate(outputJson);
-
                 if (!violations.isEmpty()) {
                     String summary = violations.stream()
                             .limit(2)
@@ -173,12 +182,17 @@ public class OpenAiJsonClient {
                     if (summary.length() > SUMMARY_LIMIT) {
                         summary = summary.substring(0, SUMMARY_LIMIT);
                     }
-                    meterRegistry.counter("openai_schema_validation_failures_total", "operation", request.getOperation()).increment();
+                    meterRegistry.counter("openai_schema_validation_failures_total", "operation", request.getOperation())
+                            .increment();
                     throw new OpenAiJsonClientException(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT, "OpenAI schema validation failed", summary);
                 }
 
-                Integer tokensIn = root.path("usage").path("prompt_tokens").isNumber() ? root.path("usage").path("prompt_tokens").asInt() : null;
-                Integer tokensOut = root.path("usage").path("completion_tokens").isNumber() ? root.path("usage").path("completion_tokens").asInt() : null;
+                Integer tokensIn = root.path("usage").path("prompt_tokens").isNumber()
+                        ? root.path("usage").path("prompt_tokens").asInt()
+                        : null;
+                Integer tokensOut = root.path("usage").path("completion_tokens").isNumber()
+                        ? root.path("usage").path("completion_tokens").asInt()
+                        : null;
 
                 long durationMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
 
@@ -202,9 +216,12 @@ public class OpenAiJsonClient {
                     meterRegistry.counter("openai_tokens_out_total").increment(tokensOut);
                 }
 
-                log.info("openai_call_success operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} inputChars={} outputChars={} inputTruncated={} promptHash={} outputHash={}",
-                        request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(), request.getTaskId(),
-                        boundedPrompt.length(), lastRawContentText.length(), inputTruncated, sha256(boundedPrompt), sha256(lastRawContentText));
+                log.info(
+                        "openai_call_success operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} inputChars={} outputChars={} inputTruncated={} promptHash={} outputHash={}",
+                        request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(),
+                        request.getTaskId(), boundedPrompt.length(), lastRawContentText.length(), inputTruncated,
+                        sha256(boundedPrompt), sha256(lastRawContentText)
+                );
 
                 return OpenAiJsonResponse.builder()
                         .content(outputJson)
@@ -215,19 +232,16 @@ public class OpenAiJsonClient {
                         .tokensOut(tokensOut)
                         .build();
 
-            } catch (java.net.http.HttpTimeoutException ex) {
-                terminal = new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", ex);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                terminal = new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", ex);
-            } catch (IOException ex) {
-                terminal = new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", ex);
             } catch (OpenAiJsonClientException ex) {
                 terminal = ex;
+            } catch (Exception ex) {
+                terminal = classifyTransportFailure(ex);
             }
 
-            boolean shouldRetry = retryEnabled && attempt < attempts
-                    && (terminal.getErrorCode() == OpenAiErrorCode.TIMEOUT || terminal.getErrorCode() == OpenAiErrorCode.UPSTREAM_5XX);
+            boolean shouldRetry = retryEnabled
+                    && attempt < attempts
+                    && (terminal.getErrorCode() == OpenAiErrorCode.TIMEOUT
+                    || terminal.getErrorCode() == OpenAiErrorCode.UPSTREAM_5XX);
 
             if (!shouldRetry) {
                 Counter.builder("openai_requests_total")
@@ -238,15 +252,40 @@ public class OpenAiJsonClient {
                         .increment();
 
                 long durationMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
-                log.warn("openai_call_failed operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} errorCode={} schemaViolationSummary={} promptHash={} outputHash={} inputChars={}",
-                        request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(), request.getTaskId(),
-                        terminal.getErrorCode(), terminal.getSchemaViolationSummary(), sha256(boundedPrompt), sha256(lastRawContentText), boundedPrompt.length());
+                log.warn(
+                        "openai_call_failed operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} errorCode={} schemaViolationSummary={} promptHash={} outputHash={} inputChars={}",
+                        request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(),
+                        request.getTaskId(), terminal.getErrorCode(), terminal.getSchemaViolationSummary(),
+                        sha256(boundedPrompt), sha256(lastRawContentText), boundedPrompt.length()
+                );
 
                 throw terminal;
             }
         }
 
         throw terminal;
+    }
+
+    private OpenAiJsonClientException classifyTransportFailure(Exception ex) {
+        Throwable t = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
+
+        if (t instanceof java.net.http.HttpTimeoutException
+                || t instanceof HttpConnectTimeoutException
+                || t instanceof SocketTimeoutException
+                || t instanceof InterruptedException) {
+
+            if (t instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+                return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", t);
+            }
+            return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", t);
+        }
+
+        if (t instanceof IOException) {
+            return new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", t);
+        }
+
+        return new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI unexpected failure", t);
     }
 
     private String sha256(String value) {
