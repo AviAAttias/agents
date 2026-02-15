@@ -1,41 +1,57 @@
 package com.example.agents.financialextractionworker.service;
 
+import com.example.agents.common.ai.OpenAiJsonClient;
+import com.example.agents.common.ai.OpenAiJsonClientException;
+import com.example.agents.common.ai.OpenAiJsonRequest;
+import com.example.agents.common.ai.OpenAiJsonResponse;
+import com.example.agents.common.ai.PipelineTaskException;
 import com.example.agents.common.dto.PipelineMessageDto;
 import com.example.agents.common.enums.PipelineStatus;
 import com.example.agents.financialextractionworker.dto.PipelineStepRequestDto;
 import com.example.agents.financialextractionworker.entity.PipelineStepEntity;
 import com.example.agents.financialextractionworker.mapper.IPipelineStepMapper;
 import com.example.agents.financialextractionworker.repository.IPipelineStepRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class PipelineStepService implements IPipelineStepService {
-    private static final Pattern AMOUNT_PATTERN = Pattern.compile("(\\d+[.,]\\d{2})");
-    private static final Pattern CURRENCY_PATTERN = Pattern.compile("\\b(USD|EUR|GBP|SAR|AED)\\b", Pattern.CASE_INSENSITIVE);
-
     private final IPipelineStepRepository pipelineStepRepository;
     private final IPipelineStepMapper pipelineStepMapper;
     private final OpenAiJsonClient openAiJsonClient;
     private final ObjectMapper objectMapper;
+    private final Validator validator;
+
+    @Value("${ai.operations.financial-extraction.max-text-chars:12000}")
+    private int maxTextChars;
 
     @Override
     @Transactional
     public PipelineMessageDto process(PipelineStepRequestDto requestDto) {
         PipelineStepEntity entity = pipelineStepRepository.findByIdempotencyKey(requestDto.getJobId() + ":" + requestDto.getTaskType())
                 .orElseGet(() -> pipelineStepMapper.toEntity(requestDto));
-        entity.setPayloadJson(extractFinancialData(requestDto.getPayloadJson()));
+        entity.setPayloadJson(extractFinancialData(requestDto));
         entity.setStatus(PipelineStatus.PROCESSED.name());
         entity.setUpdatedAt(OffsetDateTime.now());
         pipelineStepRepository.save(entity);
@@ -49,7 +65,10 @@ public class PipelineStepService implements IPipelineStepService {
                 .build();
     }
 
-    private String extractFinancialData(String payloadJson) {
+    private String extractFinancialData(PipelineStepRequestDto requestDto) {
+        if (requestDto.getPayloadJson() == null || requestDto.getPayloadJson().isBlank()) {
+            throw new PipelineTaskException("INVALID_INPUT", "financial extraction payload is blank");
+        }
         ObjectNode schema = objectMapper.createObjectNode();
         schema.put("type", "object");
 
@@ -61,7 +80,7 @@ public class PipelineStepService implements IPipelineStepService {
         properties.set("taxAmount", objectMapper.createObjectNode().put("type", "number"));
         properties.set("dueDate", objectMapper.createObjectNode().put("type", "string"));
         properties.set("confidence", objectMapper.createObjectNode().put("type", "number").put("minimum", 0).put("maximum", 1));
-        properties.set("explanation", objectMapper.createObjectNode().put("type", "string"));
+        properties.set("explanation", objectMapper.createObjectNode().put("type", "string").put("minLength", 3));
 
         schema.set("properties", properties);
         schema.set("required", objectMapper.valueToTree(List.of(
@@ -69,35 +88,69 @@ public class PipelineStepService implements IPipelineStepService {
         )));
         schema.put("additionalProperties", false);
 
-        String systemPrompt = "You are a financial data extraction specialist. Extract structured values from OCR text. " +
-                "Be conservative with confidence and provide a short explanation of signal quality.";
-        String userPrompt = "Extract fields from this payload and return strictly valid JSON.\nPayload:\n" + payloadJson;
-
-        return openAiJsonClient.completeJson(systemPrompt, userPrompt, schema)
-                .orElseGet(() -> deterministicFallback(payloadJson));
-    }
-
-    private String deterministicFallback(String payloadJson) {
-        Matcher amountMatcher = AMOUNT_PATTERN.matcher(payloadJson);
-        Matcher currencyMatcher = CURRENCY_PATTERN.matcher(payloadJson);
-        BigDecimal totalAmount = amountMatcher.find()
-                ? new BigDecimal(amountMatcher.group(1).replace(',', '.'))
-                : BigDecimal.ZERO;
-        String currency = currencyMatcher.find() ? currencyMatcher.group(1).toUpperCase() : "UNKNOWN";
+        String boundedPayload = requestDto.getPayloadJson().length() > maxTextChars
+                ? requestDto.getPayloadJson().substring(0, maxTextChars)
+                : requestDto.getPayloadJson();
+        String systemPrompt = "You are a financial data extraction specialist. Extract structured values from OCR text.";
+        String userPrompt = "Extract fields from this payload and return strictly valid JSON.\nPayload:\n" + boundedPayload;
 
         try {
-            return objectMapper.writeValueAsString(objectMapper.createObjectNode()
-                    .put("documentType", "unknown")
-                    .put("invoiceNumber", "")
-                    .put("currency", currency)
-                    .put("totalAmount", totalAmount)
-                    .put("taxAmount", 0)
-                    .put("dueDate", "")
-                    .put("confidence", 0.35)
-                    .put("explanation", "Deterministic fallback parser used because LLM output was unavailable."));
-        } catch (JsonProcessingException ex) {
-            return "{\"documentType\":\"unknown\",\"currency\":\"UNKNOWN\",\"totalAmount\":0," +
-                    "\"confidence\":0,\"explanation\":\"fallback serialization error\"}";
+            OpenAiJsonResponse response = openAiJsonClient.completeJson(OpenAiJsonRequest.builder()
+                    .operation("financial_extraction")
+                    .schemaName("financial_extraction_response")
+                    .systemPrompt(systemPrompt)
+                    .userPrompt(userPrompt)
+                    .jsonSchema(schema)
+                    .requestId(UUID.randomUUID().toString())
+                    .jobId(requestDto.getJobId())
+                    .taskId(requestDto.getTaskType())
+                    .maxInputChars(maxTextChars)
+                    .build());
+            FinancialExtractionResult result = objectMapper.treeToValue(response.getContent(), FinancialExtractionResult.class);
+            validateOutput(result);
+            ObjectNode output = objectMapper.valueToTree(result);
+            output.put("input_truncated", response.isInputTruncated() || requestDto.getPayloadJson().length() > maxTextChars);
+            output.put("chunk_count", 1);
+            return objectMapper.writeValueAsString(output);
+        } catch (OpenAiJsonClientException ex) {
+            throw new PipelineTaskException(ex.getErrorCode().name(), "financial extraction LLM call failed", ex);
+        } catch (PipelineTaskException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new PipelineTaskException("INVALID_OUTPUT", "financial extraction result could not be validated", ex);
         }
+    }
+
+    private void validateOutput(FinancialExtractionResult result) {
+        Set<ConstraintViolation<FinancialExtractionResult>> violations = validator.validate(result);
+        if (!violations.isEmpty()) {
+            throw new PipelineTaskException("INVALID_OUTPUT", violations.iterator().next().getMessage());
+        }
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    private static class FinancialExtractionResult {
+        @NotBlank
+        private String documentType;
+        private String invoiceNumber;
+
+        @NotBlank
+        private String currency;
+
+        @NotNull
+        private BigDecimal totalAmount;
+        private BigDecimal taxAmount;
+
+        private String dueDate;
+
+        @DecimalMin("0.0")
+        @DecimalMax("1.0")
+        private double confidence;
+
+        @NotBlank
+        private String explanation;
     }
 }

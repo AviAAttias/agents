@@ -4,20 +4,36 @@ import com.example.agents.classificationworker.dto.PipelineStepRequestDto;
 import com.example.agents.classificationworker.entity.PipelineStepEntity;
 import com.example.agents.classificationworker.mapper.IPipelineStepMapper;
 import com.example.agents.classificationworker.repository.IPipelineStepRepository;
+import com.example.agents.common.ai.OpenAiJsonClient;
+import com.example.agents.common.ai.OpenAiJsonClientException;
+import com.example.agents.common.ai.OpenAiJsonRequest;
+import com.example.agents.common.ai.OpenAiJsonResponse;
+import com.example.agents.common.ai.PipelineTaskException;
 import com.example.agents.common.dto.PipelineMessageDto;
 import com.example.agents.common.enums.PipelineStatus;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Builder;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PipelineStepService implements IPipelineStepService {
@@ -25,6 +41,10 @@ public class PipelineStepService implements IPipelineStepService {
     private final IPipelineStepMapper pipelineStepMapper;
     private final OpenAiJsonClient openAiJsonClient;
     private final ObjectMapper objectMapper;
+    private final Validator validator;
+
+    @Value("${ai.operations.classification.max-text-chars:12000}")
+    private int maxTextChars;
 
     @Override
     @Transactional
@@ -34,7 +54,7 @@ public class PipelineStepService implements IPipelineStepService {
                 .orElseGet(() -> pipelineStepMapper.toEntity(requestDto));
 
         String payload = entity.getId() == null && (entity.getPayloadJson() == null || entity.getPayloadJson().isBlank())
-                ? classifyPayload(requestDto.getPayloadJson())
+                ? classifyPayload(requestDto)
                 : requestDto.getPayloadJson();
 
         entity.setPayloadJson(payload);
@@ -51,19 +71,49 @@ public class PipelineStepService implements IPipelineStepService {
                 .build();
     }
 
-    private String classifyPayload(String payloadJson) {
+    private String classifyPayload(PipelineStepRequestDto requestDto) {
         try {
-            JsonNode payload = objectMapper.readTree(payloadJson);
-            String text = payload.path("text").asText(payloadJson);
+            JsonNode payload = objectMapper.readTree(requestDto.getPayloadJson());
+            String text = payload.path("text").asText("").trim();
+            if (text.isBlank()) {
+                throw new PipelineTaskException("INVALID_INPUT", "classification payload text is blank");
+            }
+            boolean inputTruncated = text.length() > maxTextChars;
+            String boundedText = inputTruncated ? text.substring(0, maxTextChars) : text;
             List<String> labels = extractLabels(payload.path("candidateLabels"));
             JsonNode schema = classificationSchema(labels);
-            String userPrompt = "Classify the text into one label from: " + labels + "\nText:\n" + text +
+            String userPrompt = "Classify the text into one label from: " + labels + "\nText:\n" + boundedText +
                     "\nReturn confidence between 0 and 1.";
 
-            return openAiJsonClient.completeJson(classificationSystemPrompt(labels), userPrompt, schema)
-                    .orElseGet(() -> fallbackClassification(text, labels));
+            OpenAiJsonResponse response = openAiJsonClient.completeJson(OpenAiJsonRequest.builder()
+                    .operation("classification")
+                    .schemaName("classification_response")
+                    .systemPrompt(classificationSystemPrompt(labels))
+                    .userPrompt(userPrompt)
+                    .jsonSchema(schema)
+                    .requestId(UUID.randomUUID().toString())
+                    .jobId(requestDto.getJobId())
+                    .taskId(requestDto.getTaskType())
+                    .maxInputChars(maxTextChars)
+                    .build());
+            ClassificationResult result = objectMapper.treeToValue(response.getContent(), ClassificationResult.class);
+            validateOutput(result);
+            ObjectNode output = objectMapper.valueToTree(result);
+            output.put("input_truncated", inputTruncated || response.isInputTruncated());
+            return objectMapper.writeValueAsString(output);
+        } catch (OpenAiJsonClientException ex) {
+            throw new PipelineTaskException(ex.getErrorCode().name(), "classification LLM call failed", ex);
+        } catch (PipelineTaskException ex) {
+            throw ex;
         } catch (Exception ex) {
-            return fallbackClassification(payloadJson, List.of("invoice", "receipt", "bank_statement", "other"));
+            throw new PipelineTaskException("INVALID_INPUT", "classification payload parse failed", ex);
+        }
+    }
+
+    private void validateOutput(ClassificationResult result) {
+        Set<ConstraintViolation<ClassificationResult>> violations = validator.validate(result);
+        if (!violations.isEmpty()) {
+            throw new PipelineTaskException("INVALID_OUTPUT", violations.iterator().next().getMessage());
         }
     }
 
@@ -81,10 +131,6 @@ public class PipelineStepService implements IPipelineStepService {
 
     private String classificationSystemPrompt(List<String> labels) {
         return "You are a senior financial document classification specialist. " +
-                "Use zero-shot reasoning over the allowed labels and apply few-shot style guidance: " +
-                "1) 'Total due by 2024-01-31' -> invoice. " +
-                "2) 'Point of sale card payment with VAT' -> receipt. " +
-                "3) 'Opening balance and account transactions' -> bank_statement. " +
                 "Output only JSON matching schema and never invent labels outside: " + labels;
     }
 
@@ -108,6 +154,7 @@ public class PipelineStepService implements IPipelineStepService {
 
         ObjectNode reasonNode = objectMapper.createObjectNode();
         reasonNode.put("type", "string");
+        reasonNode.put("minLength", 3);
         properties.set("reason", reasonNode);
 
         schema.set("properties", properties);
@@ -117,19 +164,15 @@ public class PipelineStepService implements IPipelineStepService {
         return schema;
     }
 
-    private String fallbackClassification(String text, List<String> labels) {
-        String lowered = text.toLowerCase();
-        String label = labels.contains("invoice") && (lowered.contains("invoice") || lowered.contains("total due")) ? "invoice"
-                : labels.contains("receipt") && lowered.contains("receipt") ? "receipt"
-                : labels.contains("bank_statement") && lowered.contains("balance") ? "bank_statement"
-                : labels.get(labels.size() - 1);
-        try {
-            return objectMapper.writeValueAsString(objectMapper.createObjectNode()
-                    .put("label", label)
-                    .put("confidence", 0.45)
-                    .put("reason", "Fallback keyword classification used because LLM response was unavailable."));
-        } catch (JsonProcessingException ex) {
-            return "{\"label\":\"other\",\"confidence\":0.0,\"reason\":\"fallback serialization error\"}";
-        }
+    @Data
+    @Builder
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = ClassificationResult.ClassificationResultBuilder.class)
+    private static class ClassificationResult {
+        @NotBlank String label;
+        @DecimalMin("0.0") @DecimalMax("1.0") double confidence;
+        @NotBlank String reason;
+
+        @com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder(withPrefix = "")
+        public static class ClassificationResultBuilder {}
     }
 }
