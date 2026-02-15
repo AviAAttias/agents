@@ -19,8 +19,10 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -128,20 +130,27 @@ public class PipelineStepService implements IPipelineStepService {
 
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     private static class FinancialExtractionResult {
         @NotBlank
-        String documentType;
-        String invoiceNumber;
+        private String documentType;
+        private String invoiceNumber;
+
         @NotBlank
-        String currency;
+        private String currency;
+
         @NotNull
-        BigDecimal totalAmount;
-        BigDecimal taxAmount;
-        String dueDate;
+        private BigDecimal totalAmount;
+        private BigDecimal taxAmount;
+
+        private String dueDate;
+
         @DecimalMin("0.0")
         @DecimalMax("1.0")
-        double confidence;
+        private double confidence;
+
         @NotBlank
-        String explanation;
+        private String explanation;
     }
 }
