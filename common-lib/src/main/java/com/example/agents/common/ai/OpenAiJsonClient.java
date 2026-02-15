@@ -127,7 +127,7 @@ public class OpenAiJsonClient {
 
                 byte[] payload = objectMapper.writeValueAsBytes(requestBody);
 
-                HttpResult http = postJsonWithTimeout(
+                HttpResult http = postJsonNoKeepAlive(
                         baseUrl + "/v1/chat/completions",
                         payload,
                         requestId,
@@ -275,31 +275,43 @@ public class OpenAiJsonClient {
         }
     }
 
-    private HttpResult postJsonWithTimeout(String url, byte[] payload, String requestId, long timeoutMs) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-        conn.setRequestMethod("POST");
-        conn.setDoOutput(true);
+    /**
+     * Critical for the unit test:
+     * - Force "Connection: close" so retries don't get serialized behind an in-flight keep-alive connection.
+     * - Always disconnect in finally, including on timeouts, to avoid reuse.
+     */
+    private HttpResult postJsonNoKeepAlive(String url, byte[] payload, String requestId, long readTimeoutMs) throws IOException {
+        HttpURLConnection conn = null;
+        try {
+            conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
 
-        // These timeouts do what the test wants: request is sent/handled, then we time out waiting for response.
-        conn.setConnectTimeout((int) Math.min(Integer.MAX_VALUE, connectTimeoutMs));
-        conn.setReadTimeout((int) Math.min(Integer.MAX_VALUE, timeoutMs));
+            conn.setConnectTimeout((int) Math.min(Integer.MAX_VALUE, connectTimeoutMs));
+            conn.setReadTimeout((int) Math.min(Integer.MAX_VALUE, readTimeoutMs));
 
-        conn.setRequestProperty(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
-        conn.setRequestProperty(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
-        conn.setRequestProperty("X-Request-Id", requestId);
+            conn.setUseCaches(false);
+            conn.setRequestProperty("Connection", "close"); // <<<<<<<<<< key change
+            conn.setRequestProperty(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
+            conn.setRequestProperty(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+            conn.setRequestProperty("X-Request-Id", requestId);
 
-        try (OutputStream os = conn.getOutputStream()) {
-            os.write(payload);
-            os.flush();
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(payload);
+                os.flush();
+            }
+
+            int sc = conn.getResponseCode();
+
+            InputStream is = (sc >= 200 && sc < 400) ? conn.getInputStream() : conn.getErrorStream();
+            String body = (is != null) ? readAllUtf8(is) : "";
+
+            return new HttpResult(sc, body);
+        } finally {
+            if (conn != null) {
+                conn.disconnect(); // <<<<<<<<<< ensures socket not reused after timeout
+            }
         }
-
-        int sc = conn.getResponseCode();
-
-        InputStream is = (sc >= 200 && sc < 400) ? conn.getInputStream() : conn.getErrorStream();
-        String body = is != null ? readAllUtf8(is) : "";
-
-        conn.disconnect();
-        return new HttpResult(sc, body);
     }
 
     private String readAllUtf8(InputStream is) throws IOException {
