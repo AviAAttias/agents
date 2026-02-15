@@ -1,8 +1,5 @@
 # Financial Multi-Agent PDF Pipeline (Spring Boot + Netflix Conductor Workers)
 
-## Why Maven Multi-Module
-Maven multi-module keeps each microservice independently deployable while sharing strict conventions (dependencies, plugin versions, Java version, MapStruct/Lombok settings) from one parent `pom.xml`. This reduces drift, improves CI speed with targeted builds, and keeps Eclipse import straightforward (`Import Existing Maven Projects`).
-
 ## Repository Tree
 
 ```text
@@ -24,79 +21,75 @@ Maven multi-module keeps each microservice independently deployable while sharin
 └── .github/workflows/ci.yml
 ```
 
-## Implementation Plan
-1. Bootstrap parent Maven multi-module project with dependency/plugin management.
-2. Add `common-lib` DTO/enums utilities used by services.
-3. Build each microservice module with layered architecture (`dto/entity/repository/service/controller/facade`).
-4. Add idempotent persistence via Flyway and UNIQUE constraints.
-5. Implement approval patch API publishing Conductor event `approval.${jobId}`.
-6. Implement exactly-once email worker with idempotency key and MailHog support.
-7. Add Conductor task/workflow JSON definitions for external Conductor import.
-8. Add observability/security/resilience and OpenAPI exposure.
-9. Add Docker, Helm, CI, and sample PDF + demo steps.
+## AI Integration
 
-## Conductor Definitions
-- Tasks: `conductor/definitions/tasks/pipeline_tasks.json`
-- Workflow: `conductor/definitions/workflows/financial_pipeline_workflow.json`
+### Modules using OpenAI JSON structured outputs
+- `classification-worker` (`classification` operation)
+- `financial-extraction-worker` (`financial_extraction` operation)
 
-Import these JSON files into your already-running Conductor server/UI.
+Both workers use shared `common-lib` `OpenAiJsonClient` with **schema-first strict output validation**.
 
-## One-command Demo (excluding Conductor)
+### Required configuration / env
+- `OPENAI_API_KEY` (required)
+- `OPENAI_BASE_URL` (optional, default `https://api.openai.com`)
+- `OPENAI_MODEL` (default `gpt-4o-mini`)
+- `OPENAI_MAX_OUTPUT_TOKENS` (default `700`)
+- `OPENAI_MAX_INPUT_CHARS` (default `12000`)
+- `OPENAI_REQUEST_TIMEOUT_MS` (default `20000`)
+- `OPENAI_CONNECT_TIMEOUT_MS` (default `2000`)
+- `OPENAI_OVERALL_DEADLINE_MS` (default `22000`)
+- `OPENAI_RETRY_ENABLED` (default `true`)
+- `OPENAI_RETRY_MAX_ATTEMPTS` (default `1`)
+
+Worker-specific limits:
+- `CLASSIFICATION_MAX_TEXT_CHARS`
+- `FINANCIAL_EXTRACTION_MAX_TEXT_CHARS`
+
+### Schema validation behavior
+- Every call requires a JSON schema and schema name.
+- Model output is parsed as JSON and validated against the schema before mapping.
+- Failures are typed and surfaced (e.g. `INVALID_SCHEMA_OUTPUT`) with a bounded `schemaViolationSummary`.
+- No best-effort extraction/regex JSON parsing of model output.
+
+### Conductor retry interaction
+Conductor already retries tasks. The OpenAI client therefore defaults to **at most one client retry** and only for safe transient classes (`TIMEOUT`, transport/upstream 5xx) to avoid retry amplification.
+
+## Local Run
+
+### 1) Start platform services
 ```bash
 docker compose up --build
 ```
 
-Then:
-1. Start workflow from Conductor using `financial_pipeline` v1.
-2. Submit approval edits:
+This starts app services. Use your external/running Conductor instance for workflow/task execution.
+
+### 2) Import Conductor definitions
+- `conductor/definitions/tasks/pipeline_tasks.json`
+- `conductor/definitions/workflows/financial_pipeline_workflow.json`
+
+### 3) Configure API keys safely
 ```bash
-curl -u pipeline:pipeline -X PATCH http://localhost:<approval-service-port>/api/v1/approvals/<jobId> \
-  -H 'Content-Type: application/json' \
-  -d '{"decision":"APPROVED","reviewer":"alice","patchedValues":{"total":100.25}}'
+export OPENAI_API_KEY='***'
+export OPENAI_MODEL='gpt-4o-mini'
 ```
-3. Check sent email in MailHog: `http://localhost:8025`.
+Or use env files / secrets manager. Never commit keys.
 
-## Notes
-- Conductor server/UI are intentionally not implemented here.
-- Each worker persists `pipeline_step` with unique `(job_id, task_type)` and `idempotency_key` for retry safety.
-- H2 is default for local run; Postgres via `DB_URL` env.
+## Troubleshooting
 
-## AI-first worker specialization (ChatGPT/OpenAI)
+### Common OpenAI error codes
+- `RATE_LIMIT`: upstream 429, surfaced to Conductor
+- `TIMEOUT`: request or overall deadline exceeded
+- `INVALID_SCHEMA_OUTPUT`: output not JSON or schema-invalid
+- `UPSTREAM_5XX`: upstream 5xx from provider
+- `AUTH_CONFIG`: invalid/missing auth or config
+- `DISABLED`: OpenAI key absent
 
-To let AI process most of the business logic while keeping reliability, each worker now has a **domain-specialized prompt contract**:
-
-1. **classification-worker (document taxonomy expert)**
-   - Uses LLM zero-shot classification over candidate labels.
-   - Includes few-shot examples in the system prompt to anchor expected behavior.
-   - Returns strict JSON schema: `label`, `confidence`, `reason`.
-   - Why specialization matters: classification quality improves when the prompt is focused on taxonomy decisions only (not extraction/reconciliation).
-
-2. **financial-extraction-worker (financial field extraction expert)**
-   - Uses prompt-based structured extraction with JSON-schema constrained output.
-   - Returns confidence and explanation for auditability.
-   - Falls back to deterministic parsing (regex amount/currency) when LLM is unavailable.
-   - Why specialization matters: this agent is optimized for field-level precision and can keep a deterministic safety net.
-
-3. **reconciliation-worker (anomaly reasoning expert, optional AI layer)**
-   - Adds LLM explanation and recommended action for anomalies/mismatches.
-   - Returns strict JSON schema: `isAnomaly`, `confidence`, `reasoning`, `recommendedAction`.
-   - Why specialization matters: reconciliation requires contextual reasoning; isolating it avoids contaminating upstream extraction logic.
-
-### Recommended runtime settings per AI worker
-
-Set these environment variables per service:
-
-- `OPENAI_API_KEY`: required for LLM calls.
-- `OPENAI_BASE_URL`: optional custom gateway, defaults to `https://api.openai.com`.
-- `OPENAI_MODEL`: model per worker (example strategy below).
-
-Suggested model strategy:
-- classification-worker: fast/cheap model (`gpt-4o-mini`) for high-throughput routing.
-- financial-extraction-worker: stronger model (`gpt-4.1` or equivalent) for higher structured extraction accuracy.
-- reconciliation-worker: reasoning-capable model (`gpt-4.1`) for anomaly explanations.
-
-Operational tuning to get the most from AI:
-- Keep `temperature=0` for deterministic pipeline behavior.
-- Keep strict JSON schema outputs for machine-to-machine reliability.
-- Version prompts and evaluate with a golden dataset per worker.
-- Track confidence distributions; trigger human review for low-confidence outputs.
+### Logging + observability
+- Logs include structured fields: `jobId`, `workflowId`, `taskId`, `operation`, `model`, `requestId`, `durationMs`, `inputChars`, `outputChars`.
+- Prompt/output bodies are not logged; hash+length are logged.
+- Metrics emitted:
+  - `openai_requests_total{model,operation,status}`
+  - `openai_request_latency_seconds{model,operation}`
+  - `openai_schema_validation_failures_total{operation}`
+  - `openai_tokens_in_total`
+  - `openai_tokens_out_total`
