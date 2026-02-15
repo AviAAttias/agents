@@ -29,10 +29,15 @@ public class PipelineStepService implements IPipelineStepService {
     @Override
     @Transactional
     public PipelineMessageDto process(PipelineStepRequestDto requestDto) {
-        PipelineStepEntity entity = pipelineStepRepository.findByIdempotencyKey(requestDto.getJobId() + ":" + requestDto.getTaskType())
+        String idempotencyKey = requestDto.getJobId() + ":" + requestDto.getTaskType();
+        PipelineStepEntity entity = pipelineStepRepository.findByIdempotencyKey(idempotencyKey)
                 .orElseGet(() -> pipelineStepMapper.toEntity(requestDto));
 
-        entity.setPayloadJson(classifyPayload(requestDto.getPayloadJson()));
+        String payload = entity.getId() == null && (entity.getPayloadJson() == null || entity.getPayloadJson().isBlank())
+                ? classifyPayload(requestDto.getPayloadJson())
+                : requestDto.getPayloadJson();
+
+        entity.setPayloadJson(payload);
         entity.setStatus(PipelineStatus.PROCESSED.name());
         entity.setUpdatedAt(OffsetDateTime.now());
         pipelineStepRepository.save(entity);

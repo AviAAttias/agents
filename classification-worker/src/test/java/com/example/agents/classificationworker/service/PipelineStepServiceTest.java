@@ -72,12 +72,14 @@ class PipelineStepServiceTest {
         existing.setPayloadJson("old");
 
         when(repository.findByIdempotencyKey("job-2:task-b")).thenReturn(Optional.of(existing));
-        when(openAiJsonClient.completeJson(anyString(), anyString(), any())).thenReturn(Optional.empty());
 
         var response = service.process(request);
 
-        assertThat(response.getPayloadJson()).contains("confidence");
+        assertThat(response.getPayloadJson()).isEqualTo("updated invoice text");
+        assertThat(existing.getPayloadJson()).isEqualTo("updated invoice text");
         assertThat(existing.getUpdatedAt()).isAfter(OffsetDateTime.now().minusMinutes(1));
+
+        verify(openAiJsonClient, never()).completeJson(anyString(), anyString(), any());
         verify(mapper, never()).toEntity(any());
         verify(repository).save(existing);
     }
