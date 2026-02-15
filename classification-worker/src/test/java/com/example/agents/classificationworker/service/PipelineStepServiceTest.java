@@ -54,9 +54,14 @@ class PipelineStepServiceTest {
         mapped.setTaskType("task-a");
         mapped.setArtifactRef("artifact-1");
 
+        var contentNode = new ObjectMapper().readTree(
+                "{\"label\":\"invoice\",\"confidence\":0.98,\"reason\":\"contains invoice terms\"}"
+        );
+
         when(repository.findByIdempotencyKey("job-1:task-a")).thenReturn(Optional.empty());
         when(mapper.toEntity(request)).thenReturn(mapped);
-        when(openAiJsonClient.completeJson(any(OpenAiJsonRequest.class))).thenReturn(OpenAiJsonResponse.builder().content(objectMapper.readTree("{\"label\":\"invoice\",\"confidence\":0.98,\"reason\":\"contains invoice terms\"}")).build());
+        when(openAiJsonClient.completeJson(any(OpenAiJsonRequest.class)))
+                .thenReturn(OpenAiJsonResponse.builder().content(contentNode).build());
 
         var response = service.process(request);
 
@@ -64,6 +69,7 @@ class PipelineStepServiceTest {
         assertThat(response.getPayloadJson()).contains("\"label\":\"invoice\"");
         verify(repository).save(mapped);
     }
+
 
     @Test
     void process_reusesExistingEntityWhenIdempotencyKeyFound() {
