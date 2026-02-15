@@ -64,13 +64,14 @@ public class PipelineStepService implements IPipelineStepService {
 
     private List<String> extractLabels(JsonNode labelsNode) {
         List<String> labels = new ArrayList<>();
-        if (labelsNode.isArray()) {
-            labelsNode.forEach(node -> labels.add(node.asText()));
+        if (labelsNode != null && labelsNode.isArray()) {
+            for (JsonNode node : labelsNode) {
+                labels.add(node.asText());
+            }
         }
-        if (labels.isEmpty()) {
-            labels = List.of("invoice", "receipt", "bank_statement", "tax_document", "other");
-        }
-        return labels;
+        return labels.isEmpty()
+                ? List.of("invoice", "receipt", "bank_statement", "tax_document", "other")
+                : labels;
     }
 
     private String classificationSystemPrompt(List<String> labels) {
