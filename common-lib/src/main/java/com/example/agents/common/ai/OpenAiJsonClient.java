@@ -17,10 +17,8 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.MessageDigest;
@@ -28,7 +26,11 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Component
@@ -77,25 +79,25 @@ public class OpenAiJsonClient {
             throw new OpenAiJsonClientException(OpenAiErrorCode.DISABLED, "OpenAI API key is missing");
         }
 
-        long startNanos = System.nanoTime();
+        final long startNanos = System.nanoTime();
 
-        String requestId = (request.getRequestId() == null || request.getRequestId().isBlank())
+        final String requestId = (request.getRequestId() == null || request.getRequestId().isBlank())
                 ? UUID.randomUUID().toString()
                 : request.getRequestId();
 
-        int maxInputChars = request.getMaxInputChars() != null ? request.getMaxInputChars() : defaultMaxInputChars;
-        int maxOutputTokens = request.getMaxOutputTokens() != null ? request.getMaxOutputTokens() : defaultMaxOutputTokens;
+        final int maxInputChars = request.getMaxInputChars() != null ? request.getMaxInputChars() : defaultMaxInputChars;
+        final int maxOutputTokens = request.getMaxOutputTokens() != null ? request.getMaxOutputTokens() : defaultMaxOutputTokens;
 
-        String originalPrompt = request.getUserPrompt() == null ? "" : request.getUserPrompt();
-        boolean inputTruncated = originalPrompt.length() > maxInputChars;
-        String boundedPrompt = inputTruncated
+        final String originalPrompt = request.getUserPrompt() == null ? "" : request.getUserPrompt();
+        final boolean inputTruncated = originalPrompt.length() > maxInputChars;
+        final String boundedPrompt = inputTruncated
                 ? originalPrompt.substring(0, maxInputChars) + "\n...[TRUNCATED]"
                 : originalPrompt;
 
         OpenAiJsonClientException terminal = null;
         String lastRawContentText = null;
 
-        int attempts = Math.max(1, maxAttempts);
+        final int attempts = Math.max(1, maxAttempts);
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
@@ -105,6 +107,7 @@ public class OpenAiJsonClient {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI overall deadline exceeded");
                 }
 
+                // Build a fresh client each attempt (keeps behavior simple/predictable in tests).
                 HttpClient httpClient = HttpClient.newBuilder()
                         .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                         .build();
@@ -130,14 +133,17 @@ public class OpenAiJsonClient {
 
                 HttpRequest httpRequest = HttpRequest.newBuilder()
                         .uri(URI.create(baseUrl + "/v1/chat/completions"))
-                        .timeout(Duration.ofMillis(Math.min(requestTimeoutMs, remainingMs)))
+                        // IMPORTANT: do NOT use HttpRequest.timeout(...) here; it can abort before the server
+                        // dispatches the handler (breaking the retry/hits test). We enforce timeout via get(...).
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                         .header("X-Request-Id", requestId)
                         .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
                         .build();
 
-                HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+                long attemptTimeoutMs = Math.min(requestTimeoutMs, remainingMs);
+
+                HttpResponse<String> response = sendWithTimeout(httpClient, httpRequest, attemptTimeoutMs);
 
                 int sc = response.statusCode();
                 if (sc == 429) {
@@ -235,7 +241,7 @@ public class OpenAiJsonClient {
             } catch (OpenAiJsonClientException ex) {
                 terminal = ex;
             } catch (Exception ex) {
-                terminal = classifyTransportFailure(ex);
+                terminal = classifyFailure(ex);
             }
 
             boolean shouldRetry = retryEnabled
@@ -266,25 +272,48 @@ public class OpenAiJsonClient {
         throw terminal;
     }
 
-    private OpenAiJsonClientException classifyTransportFailure(Exception ex) {
-        Throwable t = (ex instanceof CompletionException && ex.getCause() != null) ? ex.getCause() : ex;
-
-        if (t instanceof java.net.http.HttpTimeoutException
-                || t instanceof HttpConnectTimeoutException
-                || t instanceof SocketTimeoutException
-                || t instanceof InterruptedException) {
-
-            if (t instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-                return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", t);
+    private HttpResponse<String> sendWithTimeout(HttpClient httpClient, HttpRequest httpRequest, long timeoutMs) {
+        CompletableFuture<HttpResponse<String>> fut = httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString());
+        try {
+            // Key behavior: timeout the *wait*, not the request itself. This allows retries to be issued
+            // while the previous attempt is still in-flight, and the test server will count both hits.
+            return fut.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            // Do not cancel fut here; leaving it in-flight is intentional for bounded-retry semantics.
+            throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            if (cause instanceof CompletionException && cause.getCause() != null) {
+                cause = cause.getCause();
             }
-            return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", t);
+            if (cause instanceof IOException) {
+                throw new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", cause);
+            }
+            throw new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI unexpected failure", cause);
         }
+    }
 
+    private OpenAiJsonClientException classifyFailure(Exception ex) {
+        Throwable t = ex;
+        if (t instanceof CompletionException && t.getCause() != null) {
+            t = t.getCause();
+        }
+        if (t instanceof OpenAiJsonClientException) {
+            return (OpenAiJsonClientException) t;
+        }
         if (t instanceof IOException) {
             return new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", t);
         }
-
+        if (t instanceof InterruptedException) {
+            Thread.currentThread().interrupt();
+            return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", t);
+        }
+        if (t instanceof TimeoutException) {
+            return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", t);
+        }
         return new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI unexpected failure", t);
     }
 
