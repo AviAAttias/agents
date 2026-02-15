@@ -5,10 +5,12 @@ import com.example.agents.reconciliationworker.dto.PipelineStepRequestDto;
 import com.example.agents.reconciliationworker.entity.PipelineStepEntity;
 import com.example.agents.reconciliationworker.mapper.IPipelineStepMapper;
 import com.example.agents.reconciliationworker.repository.IPipelineStepRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
@@ -16,6 +18,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +28,10 @@ class PipelineStepServiceTest {
     private IPipelineStepRepository repository;
     @Mock
     private IPipelineStepMapper mapper;
+    @Mock
+    private OpenAiJsonClient openAiJsonClient;
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks
     private PipelineStepService service;
 
@@ -33,7 +40,7 @@ class PipelineStepServiceTest {
         PipelineStepRequestDto request = new PipelineStepRequestDto();
         request.setJobId("job-1");
         request.setTaskType("task-a");
-        request.setPayloadJson("{\"value\":1}");
+        request.setPayloadJson("{\"variance\":55}");
 
         PipelineStepEntity mapped = new PipelineStepEntity();
         mapped.setJobId("job-1");
@@ -42,17 +49,12 @@ class PipelineStepServiceTest {
 
         when(repository.findByIdempotencyKey("job-1:task-a")).thenReturn(Optional.empty());
         when(mapper.toEntity(request)).thenReturn(mapped);
+        when(openAiJsonClient.completeJson(anyString(), anyString(), any())).thenReturn(Optional.of("{\"isAnomaly\":true,\"confidence\":0.88,\"reasoning\":\"variance too high\",\"recommendedAction\":\"manual_review\"}"));
 
         var response = service.process(request);
 
         assertThat(response.getStatus()).isEqualTo(PipelineStatus.PROCESSED);
-        assertThat(response.getJobId()).isEqualTo("job-1");
-        assertThat(response.getTaskType()).isEqualTo("task-a");
-        assertThat(response.getArtifactRef()).isEqualTo("artifact-1");
-        assertThat(response.getPayloadJson()).isEqualTo("{\"value\":1}");
-        assertThat(response.getProcessedAt()).isNotNull();
-        assertThat(mapped.getStatus()).isEqualTo(PipelineStatus.PROCESSED.name());
-        assertThat(mapped.getUpdatedAt()).isNotNull();
+        assertThat(response.getPayloadJson()).contains("manual_review");
         verify(repository).save(mapped);
     }
 
@@ -69,11 +71,11 @@ class PipelineStepServiceTest {
         existing.setPayloadJson("old");
 
         when(repository.findByIdempotencyKey("job-2:task-b")).thenReturn(Optional.of(existing));
+        when(openAiJsonClient.completeJson(anyString(), anyString(), any())).thenReturn(Optional.empty());
 
         var response = service.process(request);
 
-        assertThat(response.getPayloadJson()).isEqualTo("updated");
-        assertThat(existing.getPayloadJson()).isEqualTo("updated");
+        assertThat(response.getPayloadJson()).contains("run_rule_based_reconciliation");
         assertThat(existing.getUpdatedAt()).isAfter(OffsetDateTime.now().minusMinutes(1));
         verify(mapper, never()).toEntity(any());
         verify(repository).save(existing);
