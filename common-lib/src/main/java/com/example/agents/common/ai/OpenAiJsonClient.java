@@ -89,6 +89,9 @@ public class OpenAiJsonClient {
         OpenAiJsonClientException terminal = null;
         int attempts = Math.max(1, maxAttempts);
 
+        // Capture model output (if any) for failure logging; avoids out-of-scope access + NPEs.
+        String lastRawContentText = null;
+
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
                 long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
@@ -146,9 +149,11 @@ public class OpenAiJsonClient {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT, "OpenAI response content is missing text");
                 }
 
+                lastRawContentText = contentNode.asText();
+
                 JsonNode outputJson;
                 try {
-                    outputJson = objectMapper.readTree(contentNode.asText());
+                    outputJson = objectMapper.readTree(lastRawContentText);
                 } catch (IOException ex) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT, "Model output is not valid JSON", ex);
                 }
@@ -199,13 +204,13 @@ public class OpenAiJsonClient {
 
                 log.info("openai_call_success operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} inputChars={} outputChars={} inputTruncated={} promptHash={} outputHash={}",
                         request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(), request.getTaskId(),
-                        boundedPrompt.length(), contentNode.asText().length(), inputTruncated, sha256(boundedPrompt), sha256(contentNode.asText()));
+                        boundedPrompt.length(), lastRawContentText.length(), inputTruncated, sha256(boundedPrompt), sha256(lastRawContentText));
 
                 return OpenAiJsonResponse.builder()
                         .content(outputJson)
                         .inputTruncated(inputTruncated)
                         .inputChars(boundedPrompt.length())
-                        .outputChars(contentNode.asText().length())
+                        .outputChars(lastRawContentText.length())
                         .tokensIn(tokensIn)
                         .tokensOut(tokensOut)
                         .build();
@@ -233,9 +238,9 @@ public class OpenAiJsonClient {
                         .increment();
 
                 long durationMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
-                log.warn("openai_call_failed operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} errorCode={} schemaViolationSummary={} promptHash={} inputChars={}",
+                log.warn("openai_call_failed operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} errorCode={} schemaViolationSummary={} promptHash={} outputHash={} inputChars={}",
                         request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(), request.getTaskId(),
-                        terminal.getErrorCode(), terminal.getSchemaViolationSummary(), sha256(boundedPrompt), sha256(contentNode.asText()), boundedPrompt.length());
+                        terminal.getErrorCode(), terminal.getSchemaViolationSummary(), sha256(boundedPrompt), sha256(lastRawContentText), boundedPrompt.length());
 
                 throw terminal;
             }
@@ -245,6 +250,9 @@ public class OpenAiJsonClient {
     }
 
     private String sha256(String value) {
+        if (value == null) {
+            return "hash_null";
+        }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(value.getBytes()));
