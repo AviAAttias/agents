@@ -166,13 +166,13 @@ public class PipelineStepService implements IPipelineStepService {
 
     @Data
     @Builder
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = ClassificationResult.ClassificationResultBuilder.class)
     private static class ClassificationResult {
-        @NotBlank
-        String label;
-        @DecimalMin("0.0")
-        @DecimalMax("1.0")
-        double confidence;
-        @NotBlank
-        String reason;
+        @NotBlank String label;
+        @DecimalMin("0.0") @DecimalMax("1.0") double confidence;
+        @NotBlank String reason;
+
+        @com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder(withPrefix = "")
+        public static class ClassificationResultBuilder {}
     }
 }
