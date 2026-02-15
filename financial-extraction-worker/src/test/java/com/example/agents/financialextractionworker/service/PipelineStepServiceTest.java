@@ -57,13 +57,22 @@ class PipelineStepServiceTest {
 
         when(repository.findByIdempotencyKey("job-1:task-a")).thenReturn(Optional.empty());
         when(mapper.toEntity(request)).thenReturn(mapped);
-        when(openAiJsonClient.completeJson(any(OpenAiJsonRequest.class))).thenReturn(OpenAiJsonResponse.builder().content(objectMapper.readTree("{\"documentType\":\"invoice\",\"invoiceNumber\":\"INV-1\",\"currency\":\"USD\",\"totalAmount\":120.0,\"taxAmount\":10.0,\"dueDate\":\"2025-10-01\",\"confidence\":0.95,\"explanation\":\"explicit amount\"}")).build());
+
+        // IMPORTANT: compute outside the stubbing, using a real ObjectMapper
+        var contentNode = new ObjectMapper().readTree(
+            "{\"documentType\":\"invoice\",\"invoiceNumber\":\"INV-1\",\"currency\":\"USD\",\"totalAmount\":120.0," +
+            "\"taxAmount\":10.0,\"dueDate\":\"2025-10-01\",\"confidence\":0.95,\"explanation\":\"explicit amount\"}"
+        );
+
+        when(openAiJsonClient.completeJson(any(OpenAiJsonRequest.class)))
+            .thenReturn(OpenAiJsonResponse.builder().content(contentNode).build());
 
         var response = service.process(request);
 
         assertThat(response.getStatus()).isEqualTo(PipelineStatus.PROCESSED);
         assertThat(response.getPayloadJson()).contains("\"documentType\":\"invoice\"");
     }
+
 
     @Test
     void process_propagatesInvalidSchemaErrorCode() {
