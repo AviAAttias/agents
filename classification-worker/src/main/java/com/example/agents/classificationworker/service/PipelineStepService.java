@@ -83,14 +83,32 @@ public class PipelineStepService implements IPipelineStepService {
     }
 
     private ObjectNode classificationSchema(List<String> labels) {
-        return objectMapper.createObjectNode()
-                .put("type", "object")
-                .set("properties", objectMapper.createObjectNode()
-                        .set("label", objectMapper.createObjectNode().put("type", "string").set("enum", objectMapper.valueToTree(labels)))
-                        .set("confidence", objectMapper.createObjectNode().put("type", "number").put("minimum", 0).put("maximum", 1))
-                        .set("reason", objectMapper.createObjectNode().put("type", "string")))
-                .set("required", objectMapper.valueToTree(List.of("label", "confidence", "reason")))
-                .put("additionalProperties", false);
+
+        ObjectNode schema = objectMapper.createObjectNode();
+        schema.put("type", "object");
+
+        ObjectNode properties = objectMapper.createObjectNode();
+
+        ObjectNode labelNode = objectMapper.createObjectNode();
+        labelNode.put("type", "string");
+        labelNode.set("enum", objectMapper.valueToTree(labels));
+        properties.set("label", labelNode);
+
+        ObjectNode confidenceNode = objectMapper.createObjectNode();
+        confidenceNode.put("type", "number");
+        confidenceNode.put("minimum", 0);
+        confidenceNode.put("maximum", 1);
+        properties.set("confidence", confidenceNode);
+
+        ObjectNode reasonNode = objectMapper.createObjectNode();
+        reasonNode.put("type", "string");
+        properties.set("reason", reasonNode);
+
+        schema.set("properties", properties);
+        schema.set("required", objectMapper.valueToTree(List.of("label", "confidence", "reason")));
+        schema.put("additionalProperties", false);
+
+        return schema;
     }
 
     private String fallbackClassification(String text, List<String> labels) {
