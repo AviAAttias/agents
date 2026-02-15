@@ -16,21 +16,19 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 @Slf4j
 @Component
@@ -80,7 +78,6 @@ public class OpenAiJsonClient {
         }
 
         final long startNanos = System.nanoTime();
-
         final String requestId = (request.getRequestId() == null || request.getRequestId().isBlank())
                 ? UUID.randomUUID().toString()
                 : request.getRequestId();
@@ -107,10 +104,7 @@ public class OpenAiJsonClient {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI overall deadline exceeded");
                 }
 
-                // Build a fresh client each attempt (keeps behavior simple/predictable in tests).
-                HttpClient httpClient = HttpClient.newBuilder()
-                        .connectTimeout(Duration.ofMillis(connectTimeoutMs))
-                        .build();
+                long attemptTimeoutMs = Math.min(requestTimeoutMs, remainingMs);
 
                 ObjectNode requestBody = objectMapper.createObjectNode()
                         .put("model", model)
@@ -131,21 +125,16 @@ public class OpenAiJsonClient {
                                 .put("strict", true)
                                 .set("schema", request.getJsonSchema())));
 
-                HttpRequest httpRequest = HttpRequest.newBuilder()
-                        .uri(URI.create(baseUrl + "/v1/chat/completions"))
-                        // IMPORTANT: do NOT use HttpRequest.timeout(...) here; it can abort before the server
-                        // dispatches the handler (breaking the retry/hits test). We enforce timeout via get(...).
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .header("X-Request-Id", requestId)
-                        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestBody)))
-                        .build();
+                byte[] payload = objectMapper.writeValueAsBytes(requestBody);
 
-                long attemptTimeoutMs = Math.min(requestTimeoutMs, remainingMs);
+                HttpResult http = postJsonWithTimeout(
+                        baseUrl + "/v1/chat/completions",
+                        payload,
+                        requestId,
+                        attemptTimeoutMs
+                );
 
-                HttpResponse<String> response = sendWithTimeout(httpClient, httpRequest, attemptTimeoutMs);
-
-                int sc = response.statusCode();
+                int sc = http.statusCode;
                 if (sc == 429) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.RATE_LIMIT, "OpenAI rate limit");
                 }
@@ -159,7 +148,7 @@ public class OpenAiJsonClient {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI non-success status " + sc);
                 }
 
-                JsonNode root = objectMapper.readTree(response.body());
+                JsonNode root = objectMapper.readTree(http.body);
                 JsonNode contentNode = root.path("choices").path(0).path("message").path("content");
                 if (!contentNode.isTextual()) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT, "OpenAI response content is missing text");
@@ -240,8 +229,12 @@ public class OpenAiJsonClient {
 
             } catch (OpenAiJsonClientException ex) {
                 terminal = ex;
+            } catch (SocketTimeoutException ex) {
+                terminal = new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", ex);
+            } catch (IOException ex) {
+                terminal = new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", ex);
             } catch (Exception ex) {
-                terminal = classifyFailure(ex);
+                terminal = new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI unexpected failure", ex);
             }
 
             boolean shouldRetry = retryEnabled
@@ -272,49 +265,52 @@ public class OpenAiJsonClient {
         throw terminal;
     }
 
-    private HttpResponse<String> sendWithTimeout(HttpClient httpClient, HttpRequest httpRequest, long timeoutMs) {
-        CompletableFuture<HttpResponse<String>> fut = httpClient.sendAsync(httpRequest, HttpResponse.BodyHandlers.ofString());
-        try {
-            // Key behavior: timeout the *wait*, not the request itself. This allows retries to be issued
-            // while the previous attempt is still in-flight, and the test server will count both hits.
-            return fut.get(timeoutMs, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            // Do not cancel fut here; leaving it in-flight is intentional for bounded-retry semantics.
-            throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", e);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            if (cause instanceof CompletionException && cause.getCause() != null) {
-                cause = cause.getCause();
-            }
-            if (cause instanceof IOException) {
-                throw new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", cause);
-            }
-            throw new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI unexpected failure", cause);
+    private static final class HttpResult {
+        final int statusCode;
+        final String body;
+
+        HttpResult(int statusCode, String body) {
+            this.statusCode = statusCode;
+            this.body = body;
         }
     }
 
-    private OpenAiJsonClientException classifyFailure(Exception ex) {
-        Throwable t = ex;
-        if (t instanceof CompletionException && t.getCause() != null) {
-            t = t.getCause();
+    private HttpResult postJsonWithTimeout(String url, byte[] payload, String requestId, long timeoutMs) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+
+        // These timeouts do what the test wants: request is sent/handled, then we time out waiting for response.
+        conn.setConnectTimeout((int) Math.min(Integer.MAX_VALUE, connectTimeoutMs));
+        conn.setReadTimeout((int) Math.min(Integer.MAX_VALUE, timeoutMs));
+
+        conn.setRequestProperty(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey);
+        conn.setRequestProperty(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
+        conn.setRequestProperty("X-Request-Id", requestId);
+
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(payload);
+            os.flush();
         }
-        if (t instanceof OpenAiJsonClientException) {
-            return (OpenAiJsonClientException) t;
+
+        int sc = conn.getResponseCode();
+
+        InputStream is = (sc >= 200 && sc < 400) ? conn.getInputStream() : conn.getErrorStream();
+        String body = is != null ? readAllUtf8(is) : "";
+
+        conn.disconnect();
+        return new HttpResult(sc, body);
+    }
+
+    private String readAllUtf8(InputStream is) throws IOException {
+        try (InputStream in = is; ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) >= 0) {
+                baos.write(buf, 0, n);
+            }
+            return baos.toString(StandardCharsets.UTF_8);
         }
-        if (t instanceof IOException) {
-            return new OpenAiJsonClientException(OpenAiErrorCode.UPSTREAM_5XX, "OpenAI transport failure", t);
-        }
-        if (t instanceof InterruptedException) {
-            Thread.currentThread().interrupt();
-            return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request interrupted", t);
-        }
-        if (t instanceof TimeoutException) {
-            return new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", t);
-        }
-        return new OpenAiJsonClientException(OpenAiErrorCode.CLIENT_ERROR, "OpenAI unexpected failure", t);
     }
 
     private String sha256(String value) {
@@ -323,7 +319,7 @@ public class OpenAiJsonClient {
         }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(value.getBytes()));
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception ex) {
             return "hash_error";
         }
