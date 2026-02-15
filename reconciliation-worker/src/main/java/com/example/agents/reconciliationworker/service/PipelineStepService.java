@@ -6,8 +6,8 @@ import com.example.agents.reconciliationworker.dto.PipelineStepRequestDto;
 import com.example.agents.reconciliationworker.entity.PipelineStepEntity;
 import com.example.agents.reconciliationworker.mapper.IPipelineStepMapper;
 import com.example.agents.reconciliationworker.repository.IPipelineStepRepository;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,15 +43,23 @@ public class PipelineStepService implements IPipelineStepService {
     }
 
     private String explainAnomalies(String payloadJson) {
-        JsonNode schema = objectMapper.createObjectNode()
-                .put("type", "object")
-                .set("properties", objectMapper.createObjectNode()
-                        .set("isAnomaly", objectMapper.createObjectNode().put("type", "boolean"))
-                        .set("confidence", objectMapper.createObjectNode().put("type", "number").put("minimum", 0).put("maximum", 1))
-                        .set("reasoning", objectMapper.createObjectNode().put("type", "string"))
-                        .set("recommendedAction", objectMapper.createObjectNode().put("type", "string")))
-                .set("required", objectMapper.valueToTree(List.of("isAnomaly", "confidence", "reasoning", "recommendedAction")))
-                .put("additionalProperties", false);
+        ObjectNode schema = objectMapper.createObjectNode();
+        schema.put("type", "object");
+
+        ObjectNode properties = objectMapper.createObjectNode();
+        properties.set("isAnomaly", objectMapper.createObjectNode().put("type", "boolean"));
+        properties.set("confidence", objectMapper.createObjectNode()
+                .put("type", "number")
+                .put("minimum", 0)
+                .put("maximum", 1));
+        properties.set("reasoning", objectMapper.createObjectNode().put("type", "string"));
+        properties.set("recommendedAction", objectMapper.createObjectNode().put("type", "string"));
+
+        schema.set("properties", properties);
+        schema.set("required", objectMapper.valueToTree(List.of(
+                "isAnomaly", "confidence", "reasoning", "recommendedAction"
+        )));
+        schema.put("additionalProperties", false);
 
         return openAiJsonClient.completeJson(
                         "You are a reconciliation analyst expert. Explain mismatches and propose next action with concise reasoning.",
