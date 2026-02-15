@@ -7,8 +7,8 @@ import com.example.agents.financialextractionworker.entity.PipelineStepEntity;
 import com.example.agents.financialextractionworker.mapper.IPipelineStepMapper;
 import com.example.agents.financialextractionworker.repository.IPipelineStepRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,19 +50,24 @@ public class PipelineStepService implements IPipelineStepService {
     }
 
     private String extractFinancialData(String payloadJson) {
-        JsonNode schema = objectMapper.createObjectNode()
-                .put("type", "object")
-                .set("properties", objectMapper.createObjectNode()
-                        .set("documentType", objectMapper.createObjectNode().put("type", "string"))
-                        .set("invoiceNumber", objectMapper.createObjectNode().put("type", "string"))
-                        .set("currency", objectMapper.createObjectNode().put("type", "string"))
-                        .set("totalAmount", objectMapper.createObjectNode().put("type", "number"))
-                        .set("taxAmount", objectMapper.createObjectNode().put("type", "number"))
-                        .set("dueDate", objectMapper.createObjectNode().put("type", "string"))
-                        .set("confidence", objectMapper.createObjectNode().put("type", "number").put("minimum", 0).put("maximum", 1))
-                        .set("explanation", objectMapper.createObjectNode().put("type", "string")))
-                .set("required", objectMapper.valueToTree(List.of("documentType", "currency", "totalAmount", "confidence", "explanation")))
-                .put("additionalProperties", false);
+        ObjectNode schema = objectMapper.createObjectNode();
+        schema.put("type", "object");
+
+        ObjectNode properties = objectMapper.createObjectNode();
+        properties.set("documentType", objectMapper.createObjectNode().put("type", "string"));
+        properties.set("invoiceNumber", objectMapper.createObjectNode().put("type", "string"));
+        properties.set("currency", objectMapper.createObjectNode().put("type", "string"));
+        properties.set("totalAmount", objectMapper.createObjectNode().put("type", "number"));
+        properties.set("taxAmount", objectMapper.createObjectNode().put("type", "number"));
+        properties.set("dueDate", objectMapper.createObjectNode().put("type", "string"));
+        properties.set("confidence", objectMapper.createObjectNode().put("type", "number").put("minimum", 0).put("maximum", 1));
+        properties.set("explanation", objectMapper.createObjectNode().put("type", "string"));
+
+        schema.set("properties", properties);
+        schema.set("required", objectMapper.valueToTree(List.of(
+                "documentType", "currency", "totalAmount", "confidence", "explanation"
+        )));
+        schema.put("additionalProperties", false);
 
         String systemPrompt = "You are a financial data extraction specialist. Extract structured values from OCR text. " +
                 "Be conservative with confidence and provide a short explanation of signal quality.";
