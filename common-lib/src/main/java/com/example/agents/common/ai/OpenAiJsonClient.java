@@ -3,7 +3,6 @@ package com.example.agents.common.ai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.networknt.schema.InputFormat;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
@@ -76,7 +75,10 @@ public class OpenAiJsonClient {
         }
 
         long startNanos = System.nanoTime();
-        String requestId = request.getRequestId() == null || request.getRequestId().isBlank() ? UUID.randomUUID().toString() : request.getRequestId();
+        String requestId = request.getRequestId() == null || request.getRequestId().isBlank()
+                ? UUID.randomUUID().toString()
+                : request.getRequestId();
+
         int maxInputChars = request.getMaxInputChars() != null ? request.getMaxInputChars() : defaultMaxInputChars;
         int maxOutputTokens = request.getMaxOutputTokens() != null ? request.getMaxOutputTokens() : defaultMaxOutputTokens;
 
@@ -95,7 +97,10 @@ public class OpenAiJsonClient {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI overall deadline exceeded");
                 }
 
-                HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofMillis(connectTimeoutMs)).build();
+                HttpClient httpClient = HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofMillis(connectTimeoutMs))
+                        .build();
+
                 ObjectNode requestBody = objectMapper.createObjectNode()
                         .put("model", model)
                         .put("temperature", 0)
@@ -103,6 +108,7 @@ public class OpenAiJsonClient {
                         .set("messages", objectMapper.createArrayNode()
                                 .add(objectMapper.createObjectNode().put("role", "system").put("content", request.getSystemPrompt()))
                                 .add(objectMapper.createObjectNode().put("role", "user").put("content", boundedPrompt)));
+
                 requestBody.set("response_format", objectMapper.createObjectNode()
                         .put("type", "json_schema")
                         .set("json_schema", objectMapper.createObjectNode()
@@ -120,6 +126,7 @@ public class OpenAiJsonClient {
                         .build();
 
                 HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
                 if (response.statusCode() == 429) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.RATE_LIMIT, "OpenAI rate limit");
                 }
@@ -138,6 +145,7 @@ public class OpenAiJsonClient {
                 if (!contentNode.isTextual()) {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT, "OpenAI response content is missing text");
                 }
+
                 JsonNode outputJson;
                 try {
                     outputJson = objectMapper.readTree(contentNode.asText());
@@ -145,10 +153,18 @@ public class OpenAiJsonClient {
                     throw new OpenAiJsonClientException(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT, "Model output is not valid JSON", ex);
                 }
 
-                JsonSchema validator = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(request.getJsonSchema());
-                Set<com.networknt.schema.ValidationMessage> violations = validator.validate(outputJson, InputFormat.JSON);
+                JsonSchema validator = JsonSchemaFactory
+                        .getInstance(SpecVersion.VersionFlag.V202012)
+                        .getSchema(request.getJsonSchema());
+
+                Set<com.networknt.schema.ValidationMessage> violations = validator.validate(outputJson);
+
                 if (!violations.isEmpty()) {
-                    String summary = violations.stream().limit(2).map(com.networknt.schema.ValidationMessage::getMessage).reduce((a, b) -> a + "; " + b).orElse("schema violation");
+                    String summary = violations.stream()
+                            .limit(2)
+                            .map(com.networknt.schema.ValidationMessage::getMessage)
+                            .reduce((a, b) -> a + "; " + b)
+                            .orElse("schema violation");
                     if (summary.length() > SUMMARY_LIMIT) {
                         summary = summary.substring(0, SUMMARY_LIMIT);
                     }
@@ -160,14 +176,27 @@ public class OpenAiJsonClient {
                 Integer tokensOut = root.path("usage").path("completion_tokens").isNumber() ? root.path("usage").path("completion_tokens").asInt() : null;
 
                 long durationMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
-                Counter.builder("openai_requests_total").tag("model", model).tag("operation", request.getOperation()).tag("status", "success").register(meterRegistry).increment();
-                Timer.builder("openai_request_latency_seconds").tag("model", model).tag("operation", request.getOperation()).register(meterRegistry).record(Duration.ofMillis(durationMs));
+
+                Counter.builder("openai_requests_total")
+                        .tag("model", model)
+                        .tag("operation", request.getOperation())
+                        .tag("status", "success")
+                        .register(meterRegistry)
+                        .increment();
+
+                Timer.builder("openai_request_latency_seconds")
+                        .tag("model", model)
+                        .tag("operation", request.getOperation())
+                        .register(meterRegistry)
+                        .record(Duration.ofMillis(durationMs));
+
                 if (tokensIn != null) {
                     meterRegistry.counter("openai_tokens_in_total").increment(tokensIn);
                 }
                 if (tokensOut != null) {
                     meterRegistry.counter("openai_tokens_out_total").increment(tokensOut);
                 }
+
                 log.info("openai_call_success operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} inputChars={} outputChars={} inputTruncated={} promptHash={} outputHash={}",
                         request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(), request.getTaskId(),
                         boundedPrompt.length(), contentNode.asText().length(), inputTruncated, sha256(boundedPrompt), sha256(contentNode.asText()));
@@ -180,6 +209,7 @@ public class OpenAiJsonClient {
                         .tokensIn(tokensIn)
                         .tokensOut(tokensOut)
                         .build();
+
             } catch (java.net.http.HttpTimeoutException ex) {
                 terminal = new OpenAiJsonClientException(OpenAiErrorCode.TIMEOUT, "OpenAI request timeout", ex);
             } catch (InterruptedException ex) {
@@ -193,12 +223,20 @@ public class OpenAiJsonClient {
 
             boolean shouldRetry = retryEnabled && attempt < attempts
                     && (terminal.getErrorCode() == OpenAiErrorCode.TIMEOUT || terminal.getErrorCode() == OpenAiErrorCode.UPSTREAM_5XX);
+
             if (!shouldRetry) {
-                Counter.builder("openai_requests_total").tag("model", model).tag("operation", request.getOperation()).tag("status", terminal.getErrorCode().name()).register(meterRegistry).increment();
+                Counter.builder("openai_requests_total")
+                        .tag("model", model)
+                        .tag("operation", request.getOperation())
+                        .tag("status", terminal.getErrorCode().name())
+                        .register(meterRegistry)
+                        .increment();
+
                 long durationMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
                 log.warn("openai_call_failed operation={} model={} requestId={} durationMs={} jobId={} workflowId={} taskId={} errorCode={} schemaViolationSummary={} promptHash={} inputChars={}",
                         request.getOperation(), model, requestId, durationMs, request.getJobId(), request.getWorkflowId(), request.getTaskId(),
-                        terminal.getErrorCode(), terminal.getSchemaViolationSummary(), sha256(boundedPrompt), boundedPrompt.length());
+                        terminal.getErrorCode(), terminal.getSchemaViolationSummary(), sha256(boundedPrompt), sha256(contentNode.asText()), boundedPrompt.length());
+
                 throw terminal;
             }
         }
