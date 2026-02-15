@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,7 +24,12 @@ class OpenAiJsonClientTest {
 
     @Test
     void validSchemaCompliantJsonReturnsSuccess() throws Exception {
-        HttpServer server = startServer(200, "{\"choices\":[{\"message\":{\"content\":\"{\\\"label\\\":\\\"invoice\\\",\\\"confidence\\\":0.9}\"}}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8}}", 0, null);
+        HttpServer server = startServer(
+                200,
+                "{\"choices\":[{\"message\":{\"content\":\"{\\\"label\\\":\\\"invoice\\\",\\\"confidence\\\":0.9}\"}}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8}}",
+                0,
+                null
+        );
         try {
             OpenAiJsonClient client = createClient(server);
             OpenAiJsonResponse response = client.completeJson(baseRequest());
@@ -38,7 +45,8 @@ class OpenAiJsonClientTest {
         HttpServer server = startServer(200, "{\"choices\":[{\"message\":{\"content\":\"not-json\"}}]}", 0, null);
         try {
             OpenAiJsonClient client = createClient(server);
-            OpenAiJsonClientException ex = assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
+            OpenAiJsonClientException ex =
+                    assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
             assertThat(ex.getErrorCode()).isEqualTo(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT);
         } finally {
             server.stop(0);
@@ -50,7 +58,8 @@ class OpenAiJsonClientTest {
         HttpServer server = startServer(200, "{\"choices\":[{\"message\":{\"content\":\"{\\\"label\\\":123}\"}}]}", 0, null);
         try {
             OpenAiJsonClient client = createClient(server);
-            OpenAiJsonClientException ex = assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
+            OpenAiJsonClientException ex =
+                    assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
             assertThat(ex.getErrorCode()).isEqualTo(OpenAiErrorCode.INVALID_SCHEMA_OUTPUT);
             assertThat(ex.getSchemaViolationSummary()).isNotBlank();
         } finally {
@@ -67,13 +76,21 @@ class OpenAiJsonClientTest {
     @Test
     void timeoutClassifiedAndRetryBounded() throws Exception {
         AtomicInteger hits = new AtomicInteger();
-        HttpServer server = startServer(200, "{\"choices\":[{\"message\":{\"content\":\"{\\\"label\\\":\\\"invoice\\\",\\\"confidence\\\":0.9}\"}}]}", 200, hits);
+        HttpServer server = startServer(
+                200,
+                "{\"choices\":[{\"message\":{\"content\":\"{\\\"label\\\":\\\"invoice\\\",\\\"confidence\\\":0.9}\"}}]}",
+                200,
+                hits
+        );
         try {
             OpenAiJsonClient client = createClient(server);
             ReflectionTestUtils.setField(client, "requestTimeoutMs", 50L);
             ReflectionTestUtils.setField(client, "maxAttempts", 2);
             ReflectionTestUtils.setField(client, "retryEnabled", true);
-            OpenAiJsonClientException ex = assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
+
+            OpenAiJsonClientException ex =
+                    assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
+
             assertThat(ex.getErrorCode()).isEqualTo(OpenAiErrorCode.TIMEOUT);
             assertThat(hits.get()).isEqualTo(2);
         } finally {
@@ -85,7 +102,8 @@ class OpenAiJsonClientTest {
         HttpServer server = startServer(status, "{}", 0, null);
         try {
             OpenAiJsonClient client = createClient(server);
-            OpenAiJsonClientException ex = assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
+            OpenAiJsonClientException ex =
+                    assertThrows(OpenAiJsonClientException.class, () -> client.completeJson(baseRequest()));
             assertThat(ex.getErrorCode()).isEqualTo(expected);
         } finally {
             server.stop(0);
@@ -101,6 +119,7 @@ class OpenAiJsonClientTest {
         schema.set("properties", props);
         schema.putArray("required").add("label").add("confidence");
         schema.put("additionalProperties", false);
+
         return OpenAiJsonRequest.builder()
                 .operation("classification")
                 .schemaName("classification_response")
@@ -129,15 +148,24 @@ class OpenAiJsonClientTest {
 
     private HttpServer startServer(int status, String responseBody, long delayMs, AtomicInteger hits) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/v1/chat/completions", exchange -> handle(exchange, status, responseBody, delayMs, hits));
+
+        // ✅ Critical: allow concurrent handling so retry attempt increments hits even if first handler is sleeping.
+        ExecutorService executor = Executors.newCachedThreadPool();
+        server.setExecutor(executor);
+
+        server.createContext("/v1/chat/completions",
+                exchange -> handle(exchange, status, responseBody, delayMs, hits));
         server.start();
         return server;
     }
 
-    private void handle(HttpExchange exchange, int status, String responseBody, long delayMs, AtomicInteger hits) throws IOException {
+    private void handle(HttpExchange exchange, int status, String responseBody, long delayMs, AtomicInteger hits)
+            throws IOException {
+
         if (hits != null) {
             hits.incrementAndGet();
         }
+
         if (delayMs > 0) {
             try {
                 Thread.sleep(delayMs);
@@ -145,6 +173,7 @@ class OpenAiJsonClientTest {
                 Thread.currentThread().interrupt();
             }
         }
+
         byte[] out = responseBody.getBytes(StandardCharsets.UTF_8);
         exchange.sendResponseHeaders(status, out.length);
         try (OutputStream os = exchange.getResponseBody()) {
