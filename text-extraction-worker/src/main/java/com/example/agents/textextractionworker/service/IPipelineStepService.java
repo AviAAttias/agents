@@ -1,8 +1,8 @@
 package com.example.agents.textextractionworker.service;
 
-import com.example.agents.common.dto.PipelineMessageDto;
-import com.example.agents.textextractionworker.dto.PipelineStepRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionResultDto;
 
 public interface IPipelineStepService {
-    PipelineMessageDto process(PipelineStepRequestDto requestDto);
+    TextExtractionResultDto process(TextExtractionRequestDto requestDto);
 }

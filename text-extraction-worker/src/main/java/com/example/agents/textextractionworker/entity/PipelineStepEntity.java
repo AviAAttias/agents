@@ -14,21 +14,33 @@ import java.time.OffsetDateTime;
 @Getter
 @Setter
 public class PipelineStepEntity {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "job_id", nullable = false)
+
+    @Column(name = "job_id", nullable = false, length = 120)
     private String jobId;
-    @Column(name = "task_type", nullable = false)
+
+    @Column(name = "task_type", nullable = false, length = 120)
     private String taskType;
-    @Column(name = "status", nullable = false)
+
+    @Column(name = "status", nullable = false, length = 40)
     private String status;
-    @Column(name = "artifact_ref")
+
+    @Column(name = "artifact_ref", length = 255)
     private String artifactRef;
+
     @Lob
     @Column(name = "payload_json")
     private String payloadJson;
-    @Column(name = "idempotency_key", nullable = false)
+
+    @Lob
+    @Column(name = "output_json")
+    private String outputJson;
+
+    @Column(name = "idempotency_key", nullable = false, length = 200)
     private String idempotencyKey;
+
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 }

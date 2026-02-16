@@ -1,8 +1,7 @@
 package com.example.agents.textextractionworker.controller;
 
-import com.example.agents.common.dto.PipelineMessageDto;
-import com.example.agents.common.enums.PipelineStatus;
-import com.example.agents.textextractionworker.dto.PipelineStepRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionResultDto;
 import com.example.agents.textextractionworker.facade.IPipelineFacade;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,12 +24,8 @@ class PipelineControllerTest {
 
     @Test
     void process_returnsFacadeResponse() {
-        PipelineStepRequestDto request = new PipelineStepRequestDto();
-        PipelineMessageDto response = PipelineMessageDto.builder()
-                .jobId("job-1")
-                .taskType("task")
-                .status(PipelineStatus.PROCESSED)
-                .build();
+        TextExtractionRequestDto request = new TextExtractionRequestDto();
+        TextExtractionResultDto response = TextExtractionResultDto.builder().text("txt").artifactRef("ref").textArtifact("ref").build();
         when(pipelineFacade.process(request)).thenReturn(response);
 
         var result = controller.process(request);

@@ -1,7 +1,7 @@
 package com.example.agents.textextractionworker.facade;
 
-import com.example.agents.common.dto.PipelineMessageDto;
-import com.example.agents.textextractionworker.dto.PipelineStepRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionResultDto;
 import com.example.agents.textextractionworker.service.IPipelineStepService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,20 +17,20 @@ import static org.mockito.Mockito.when;
 class PipelineFacadeTest {
 
     @Mock
-    private IPipelineStepService pipelineStepService;
+    private IPipelineStepService service;
 
     @InjectMocks
     private PipelineFacade facade;
 
     @Test
-    void process_delegatesToPipelineStepService() {
-        PipelineStepRequestDto request = new PipelineStepRequestDto();
-        PipelineMessageDto expected = PipelineMessageDto.builder().jobId("job-1").build();
-        when(pipelineStepService.process(request)).thenReturn(expected);
+    void process_delegatesToService() {
+        TextExtractionRequestDto request = new TextExtractionRequestDto();
+        TextExtractionResultDto response = TextExtractionResultDto.builder().text("ok").artifactRef("a").textArtifact("a").build();
+        when(service.process(request)).thenReturn(response);
 
-        PipelineMessageDto result = facade.process(request);
+        var result = facade.process(request);
 
-        assertThat(result).isSameAs(expected);
-        verify(pipelineStepService).process(request);
+        assertThat(result).isSameAs(response);
+        verify(service).process(request);
     }
 }
