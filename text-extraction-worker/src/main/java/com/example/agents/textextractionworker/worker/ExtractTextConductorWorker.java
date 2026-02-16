@@ -3,7 +3,7 @@ package com.example.agents.textextractionworker.worker;
 import com.example.agents.common.ai.PipelineTaskException;
 import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
 import com.example.agents.textextractionworker.dto.TextExtractionResultDto;
-import com.example.agents.textextractionworker.service.IPipelineStepService;
+import com.example.agents.textextractionworker.service.TextExtractionPipelineService;
 import com.netflix.conductor.client.worker.Worker;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
@@ -18,11 +18,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class ExtractTextConductorWorker implements Worker {
-    private final IPipelineStepService pipelineStepService;
+    private static final String TASK_NAME = "extract_text";
+
+    private final TextExtractionPipelineService textExtractionPipelineService;
 
     @Override
     public String getTaskDefName() {
-        return "extract_text";
+        return TASK_NAME;
     }
 
     @Override
@@ -39,7 +41,7 @@ public class ExtractTextConductorWorker implements Worker {
             request.setTaskId(task.getTaskId());
             request.setTaskType(getTaskDefName());
 
-            TextExtractionResultDto extracted = pipelineStepService.process(request);
+            TextExtractionResultDto extracted = textExtractionPipelineService.process(request);
             Map<String, Object> outputData = new HashMap<>();
             outputData.put("text", extracted.getText());
             outputData.put("artifactRef", extracted.getArtifactRef());
@@ -55,15 +57,18 @@ public class ExtractTextConductorWorker implements Worker {
         } catch (PipelineTaskException ex) {
             log.warn("event=extract_text_failed taskType={} taskId={} workflowId={} errorCode={} message={}",
                     getTaskDefName(), task.getTaskId(), task.getWorkflowInstanceId(), ex.getErrorCode(), ex.getMessage());
-            result.setReasonForIncompletion(ex.getErrorCode() + ": " + ex.getMessage());
-            result.setStatus(TaskResult.Status.FAILED);
-            return result;
+            return failedResult(result, ex.getErrorCode(), ex.getMessage());
         } catch (Exception ex) {
             log.error("event=extract_text_failed taskType={} taskId={} workflowId={} message={}",
                     getTaskDefName(), task.getTaskId(), task.getWorkflowInstanceId(), ex.getMessage(), ex);
-            result.setReasonForIncompletion("UNEXPECTED_ERROR: " + ex.getMessage());
-            result.setStatus(TaskResult.Status.FAILED);
-            return result;
+            return failedResult(result, "UNEXPECTED_ERROR", ex.getMessage());
         }
+    }
+
+    private TaskResult failedResult(TaskResult result, String errorCode, String errorMessage) {
+        result.setOutputData(Map.of("errorCode", errorCode, "errorMessage", errorMessage));
+        result.setReasonForIncompletion(errorCode + ": " + errorMessage);
+        result.setStatus(TaskResult.Status.FAILED);
+        return result;
     }
 }

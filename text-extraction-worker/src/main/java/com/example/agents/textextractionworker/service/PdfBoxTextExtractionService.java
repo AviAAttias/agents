@@ -3,7 +3,6 @@ package com.example.agents.textextractionworker.service;
 import com.example.agents.common.ai.PipelineTaskException;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
@@ -22,8 +21,7 @@ import java.util.HexFormat;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
-public class TextExtractionService implements ITextExtractionService {
+public class PdfBoxTextExtractionService implements PdfTextExtractionService {
     private final MeterRegistry meterRegistry;
 
     @Value("${TEXT_EXTRACTION_MAX_TEXT_CHARS:12000}")

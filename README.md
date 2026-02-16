@@ -21,6 +21,19 @@
 └── .github/workflows/ci.yml
 ```
 
+
+## Pipeline workers overview
+
+- `pdf-ingestion-service` (`ingest_pdf`): stores inbound PDF metadata/blob reference.
+- `text-extraction-worker` (`extract_text`): extracts embedded PDF text and returns `text` + `artifactRef` for downstream tasks.
+- `classification-worker` (`classify_doc`): classifies extracted text into document type.
+- `financial-extraction-worker` (`extract_financials`): extracts structured financial fields from text.
+- `reconciliation-worker` (`validate_reconcile`): validates and reconciles extracted values.
+- `reporting-worker` (`generate_report`): creates pipeline report artifacts.
+- `approval-service` / `notification-worker`: approval event + requester notification.
+
+`text-extraction-worker` currently uses PDFBox embedded-text extraction only (no OCR). For image-only PDFs, `extract_text.output.text` may be empty while `extract_text.output.artifactRef` is still produced.
+
 ## AI Integration
 
 ### Modules using OpenAI JSON structured outputs

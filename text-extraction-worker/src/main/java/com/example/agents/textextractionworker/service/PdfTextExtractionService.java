@@ -1,6 +1,6 @@
 package com.example.agents.textextractionworker.service;
 
-public interface ITextExtractionService {
+public interface PdfTextExtractionService {
     ExtractionResult extract(String artifactRef);
 
     record ExtractionResult(
