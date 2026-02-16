@@ -3,7 +3,7 @@
   <parent><groupId>com.example.agents</groupId><artifactId>financial-pipeline-parent</artifactId><version>1.0.0-SNAPSHOT</version></parent>
   <artifactId>text-extraction-worker</artifactId>
   <properties>
-    <pdfbox.version>2.0.32</pdfbox.version>
+    <pdfbox.version>3.0.6</pdfbox.version>
     <conductor.version>3.13.8</conductor.version>
   </properties>
   <dependencies>
