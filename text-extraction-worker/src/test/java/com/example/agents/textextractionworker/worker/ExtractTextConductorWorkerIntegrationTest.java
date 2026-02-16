@@ -15,6 +15,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "conductor.enabled=false")
 @Testcontainers
+@EnabledIfDockerAvailable
 class ExtractTextConductorWorkerIntegrationTest {
 
     @Container
@@ -57,7 +59,10 @@ class ExtractTextConductorWorkerIntegrationTest {
 
         TaskResult first = worker.execute(firstTask);
         assertThat(first.getStatus()).isEqualTo(TaskResult.Status.COMPLETED);
-        assertThat(first.getOutputData()).containsKeys("text", "artifactRef", "textArtifact", "inputBytes", "outputChars", "durationMs", "wasTruncated", "pageCount");
+        assertThat(first.getOutputData()).containsKeys(
+                "text", "artifactRef", "textArtifact", "inputBytes", "outputChars",
+                "durationMs", "wasTruncated", "pageCount"
+        );
 
         long stepCountAfterFirst = pipelineStepRepository.count();
         long artifactCountAfterFirst = textArtifactRepository.count();

@@ -2,9 +2,11 @@ package com.example.agents.textextractionworker.dto;
 
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 
 @Value
 @Builder
+@Jacksonized
 public class TextExtractionResultDto {
     String text;
     String artifactRef;
