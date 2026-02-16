@@ -15,7 +15,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,8 +23,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(properties = "conductor.enabled=false")
-@Testcontainers
-@EnabledIfDockerAvailable
+@Testcontainers(disabledWithoutDocker = true)
 class ExtractTextConductorWorkerIntegrationTest {
 
     @Container
