@@ -41,9 +41,17 @@ Both workers use shared `common-lib` `OpenAiJsonClient` with **schema-first stri
 - `OPENAI_RETRY_ENABLED` (default `true`)
 - `OPENAI_RETRY_MAX_ATTEMPTS` (default `1`)
 
+
 Worker-specific limits:
 - `CLASSIFICATION_MAX_TEXT_CHARS`
 - `FINANCIAL_EXTRACTION_MAX_TEXT_CHARS`
+- `TEXT_EXTRACTION_MAX_TEXT_CHARS`
+
+Text extraction output contract (`extract_text`):
+- `text`
+- `artifactRef` (`text-artifact://<id>`)
+- `textArtifact` (backward-compatible alias)
+- `inputBytes`, `outputChars`, `durationMs`, `wasTruncated`, `pageCount`
 
 ### Schema validation behavior
 - Every call requires a JSON schema and schema name.
@@ -93,3 +101,12 @@ Or use env files / secrets manager. Never commit keys.
   - `openai_schema_validation_failures_total{operation}`
   - `openai_tokens_in_total`
   - `openai_tokens_out_total`
+
+
+## How to run text-extraction-worker locally
+
+```bash
+docker compose up --build postgres config-server text-extraction-worker
+```
+
+Set `CONDUCTOR_SERVER_URL` to your Conductor API endpoint before starting when needed.

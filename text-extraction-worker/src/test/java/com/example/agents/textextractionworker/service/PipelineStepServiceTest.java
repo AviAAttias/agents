@@ -1,17 +1,17 @@
 package com.example.agents.textextractionworker.service;
 
-import com.example.agents.common.enums.PipelineStatus;
-import com.example.agents.textextractionworker.dto.PipelineStepRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
 import com.example.agents.textextractionworker.entity.PipelineStepEntity;
-import com.example.agents.textextractionworker.mapper.IPipelineStepMapper;
+import com.example.agents.textextractionworker.entity.TextArtifactEntity;
 import com.example.agents.textextractionworker.repository.IPipelineStepRepository;
+import com.example.agents.textextractionworker.repository.ITextArtifactRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,60 +22,54 @@ import static org.mockito.Mockito.*;
 class PipelineStepServiceTest {
 
     @Mock
-    private IPipelineStepRepository repository;
+    private IPipelineStepRepository pipelineStepRepository;
     @Mock
-    private IPipelineStepMapper mapper;
-    @InjectMocks
+    private ITextArtifactRepository textArtifactRepository;
+    @Mock
+    private ITextExtractionService textExtractionService;
+
     private PipelineStepService service;
 
-    @Test
-    void process_createsEntityWhenIdempotencyKeyMissing() {
-        PipelineStepRequestDto request = new PipelineStepRequestDto();
-        request.setJobId("job-1");
-        request.setTaskType("task-a");
-        request.setPayloadJson("{\"value\":1}");
-
-        PipelineStepEntity mapped = new PipelineStepEntity();
-        mapped.setJobId("job-1");
-        mapped.setTaskType("task-a");
-        mapped.setArtifactRef("artifact-1");
-
-        when(repository.findByIdempotencyKey("job-1:task-a")).thenReturn(Optional.empty());
-        when(mapper.toEntity(request)).thenReturn(mapped);
-
-        var response = service.process(request);
-
-        assertThat(response.getStatus()).isEqualTo(PipelineStatus.PROCESSED);
-        assertThat(response.getJobId()).isEqualTo("job-1");
-        assertThat(response.getTaskType()).isEqualTo("task-a");
-        assertThat(response.getArtifactRef()).isEqualTo("artifact-1");
-        assertThat(response.getPayloadJson()).isEqualTo("{\"value\":1}");
-        assertThat(response.getProcessedAt()).isNotNull();
-        assertThat(mapped.getStatus()).isEqualTo(PipelineStatus.PROCESSED.name());
-        assertThat(mapped.getUpdatedAt()).isNotNull();
-        verify(repository).save(mapped);
+    @BeforeEach
+    void setup() {
+        service = new PipelineStepService(pipelineStepRepository, textArtifactRepository, textExtractionService, new ObjectMapper());
     }
 
     @Test
-    void process_reusesExistingEntityWhenIdempotencyKeyFound() {
-        PipelineStepRequestDto request = new PipelineStepRequestDto();
-        request.setJobId("job-2");
-        request.setTaskType("task-b");
-        request.setPayloadJson("updated");
+    void process_returnsCachedOutputWhenCompletedExists() {
+        TextExtractionRequestDto request = new TextExtractionRequestDto();
+        request.setJobId("job-1");
+        request.setArtifactRef("/tmp/file.pdf");
 
         PipelineStepEntity existing = new PipelineStepEntity();
-        existing.setJobId("job-2");
-        existing.setTaskType("task-b");
-        existing.setPayloadJson("old");
+        existing.setStatus("PROCESSED");
+        existing.setOutputJson("{\"text\":\"cached\",\"artifactRef\":\"text-artifact://10\",\"textArtifact\":\"text-artifact://10\",\"inputBytes\":100,\"outputChars\":6,\"durationMs\":10,\"wasTruncated\":false,\"pageCount\":1,\"extractionMethod\":\"pdfbox\",\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}");
+        when(pipelineStepRepository.findByIdempotencyKey("job-1:extract_text")).thenReturn(Optional.of(existing));
 
-        when(repository.findByIdempotencyKey("job-2:task-b")).thenReturn(Optional.of(existing));
+        var output = service.process(request);
 
-        var response = service.process(request);
+        assertThat(output.getText()).isEqualTo("cached");
+        verify(textExtractionService, never()).extract(any());
+        verify(textArtifactRepository, never()).save(any());
+    }
 
-        assertThat(response.getPayloadJson()).isEqualTo("updated");
-        assertThat(existing.getPayloadJson()).isEqualTo("updated");
-        assertThat(existing.getUpdatedAt()).isAfter(OffsetDateTime.now().minusMinutes(1));
-        verify(mapper, never()).toEntity(any());
-        verify(repository).save(existing);
+    @Test
+    void process_persistsArtifactsOnFirstRun() {
+        TextExtractionRequestDto request = new TextExtractionRequestDto();
+        request.setJobId("job-2");
+        request.setArtifactRef("/tmp/file.pdf");
+        when(pipelineStepRepository.findByIdempotencyKey("job-2:extract_text")).thenReturn(Optional.empty());
+        when(textExtractionService.extract("/tmp/file.pdf")).thenReturn(new ITextExtractionService.ExtractionResult("text", 1, "pdfbox", 4, 10, "b".repeat(64), false));
+        when(textArtifactRepository.save(any(TextArtifactEntity.class))).thenAnswer(i -> {
+            TextArtifactEntity entity = i.getArgument(0);
+            entity.setId(22L);
+            return entity;
+        });
+
+        var output = service.process(request);
+
+        assertThat(output.getArtifactRef()).isEqualTo("text-artifact://22");
+        assertThat(output.getTextArtifact()).isEqualTo("text-artifact://22");
+        verify(pipelineStepRepository).save(any(PipelineStepEntity.class));
     }
 }

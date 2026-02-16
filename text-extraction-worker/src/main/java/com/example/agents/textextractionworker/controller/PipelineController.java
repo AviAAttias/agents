@@ -1,7 +1,7 @@
 package com.example.agents.textextractionworker.controller;
 
-import com.example.agents.common.dto.PipelineMessageDto;
-import com.example.agents.textextractionworker.dto.PipelineStepRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionResultDto;
 import com.example.agents.textextractionworker.facade.IPipelineFacade;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import jakarta.validation.Valid;
@@ -17,7 +17,7 @@ public class PipelineController {
 
     @PostMapping("/process")
     @CircuitBreaker(name = "pipelineWorker")
-    public ResponseEntity<PipelineMessageDto> process(@Valid @RequestBody PipelineStepRequestDto requestDto) {
+    public ResponseEntity<TextExtractionResultDto> process(@Valid @RequestBody TextExtractionRequestDto requestDto) {
         return ResponseEntity.ok(pipelineFacade.process(requestDto));
     }
 }

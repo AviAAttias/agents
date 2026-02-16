@@ -1,7 +1,7 @@
 package com.example.agents.textextractionworker.facade;
 
-import com.example.agents.common.dto.PipelineMessageDto;
-import com.example.agents.textextractionworker.dto.PipelineStepRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionRequestDto;
+import com.example.agents.textextractionworker.dto.TextExtractionResultDto;
 import com.example.agents.textextractionworker.service.IPipelineStepService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -12,7 +12,7 @@ public class PipelineFacade implements IPipelineFacade {
     private final IPipelineStepService pipelineStepService;
 
     @Override
-    public PipelineMessageDto process(PipelineStepRequestDto requestDto) {
+    public TextExtractionResultDto process(TextExtractionRequestDto requestDto) {
         return pipelineStepService.process(requestDto);
     }
 }
