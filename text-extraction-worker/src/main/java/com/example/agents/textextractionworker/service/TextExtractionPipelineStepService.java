@@ -19,12 +19,12 @@ import java.time.OffsetDateTime;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PipelineStepService implements IPipelineStepService {
+public class TextExtractionPipelineStepService implements TextExtractionPipelineService {
     private static final String TASK_TYPE = "extract_text";
 
     private final IPipelineStepRepository pipelineStepRepository;
     private final ITextArtifactRepository textArtifactRepository;
-    private final ITextExtractionService textExtractionService;
+    private final PdfTextExtractionService textExtractionService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -37,7 +37,7 @@ public class PipelineStepService implements IPipelineStepService {
         }
 
         long startMs = System.currentTimeMillis();
-        ITextExtractionService.ExtractionResult extractionResult = textExtractionService.extract(requestDto.getArtifactRef());
+        PdfTextExtractionService.ExtractionResult extractionResult = textExtractionService.extract(requestDto.getArtifactRef());
 
         TextArtifactEntity artifact = new TextArtifactEntity();
         artifact.setJobId(requestDto.getJobId());

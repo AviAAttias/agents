@@ -26,13 +26,13 @@ class PipelineStepServiceTest {
     @Mock
     private ITextArtifactRepository textArtifactRepository;
     @Mock
-    private ITextExtractionService textExtractionService;
+    private PdfTextExtractionService textExtractionService;
 
-    private PipelineStepService service;
+    private TextExtractionPipelineStepService service;
 
     @BeforeEach
     void setup() {
-        service = new PipelineStepService(pipelineStepRepository, textArtifactRepository, textExtractionService, new ObjectMapper());
+        service = new TextExtractionPipelineStepService(pipelineStepRepository, textArtifactRepository, textExtractionService, new ObjectMapper());
     }
 
     @Test
@@ -59,7 +59,7 @@ class PipelineStepServiceTest {
         request.setJobId("job-2");
         request.setArtifactRef("/tmp/file.pdf");
         when(pipelineStepRepository.findByIdempotencyKey("job-2:extract_text")).thenReturn(Optional.empty());
-        when(textExtractionService.extract("/tmp/file.pdf")).thenReturn(new ITextExtractionService.ExtractionResult("text", 1, "pdfbox", 4, 10, "b".repeat(64), false));
+        when(textExtractionService.extract("/tmp/file.pdf")).thenReturn(new PdfTextExtractionService.ExtractionResult("text", 1, "pdfbox", 4, 10, "b".repeat(64), false));
         when(textArtifactRepository.save(any(TextArtifactEntity.class))).thenAnswer(i -> {
             TextArtifactEntity entity = i.getArgument(0);
             entity.setId(22L);
