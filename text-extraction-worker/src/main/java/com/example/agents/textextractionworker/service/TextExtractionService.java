@@ -4,7 +4,7 @@ import com.example.agents.common.ai.PipelineTaskException;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pdfbox.io.RandomAccessReadBuffer;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -34,10 +34,11 @@ public class TextExtractionService implements ITextExtractionService {
         byte[] pdfBytes = loadPdfBytes(artifactRef);
         String sha256 = sha256(pdfBytes);
 
-        try (PDDocument document = PDDocument.load(new RandomAccessReadBuffer(pdfBytes))) {
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
             String extracted = new PDFTextStripper().getText(document);
             boolean truncated = extracted.length() > maxTextChars;
             String bounded = truncated ? extracted.substring(0, maxTextChars) : extracted;
+
             meterRegistry.counter("text_extraction_requests_total", "status", "success").increment();
             return new ExtractionResult(
                     bounded,
@@ -71,7 +72,10 @@ public class TextExtractionService implements ITextExtractionService {
             if (Files.exists(path)) {
                 return Files.readAllBytes(path);
             }
-            throw new PipelineTaskException("ARTIFACT_NOT_FOUND", "Artifact reference is unsupported or does not exist: " + artifactRef);
+            throw new PipelineTaskException(
+                    "ARTIFACT_NOT_FOUND",
+                    "Artifact reference is unsupported or does not exist: " + artifactRef
+            );
         } catch (IOException ex) {
             throw new PipelineTaskException("ARTIFACT_READ_FAILED", "Could not read artifact bytes", ex);
         }
