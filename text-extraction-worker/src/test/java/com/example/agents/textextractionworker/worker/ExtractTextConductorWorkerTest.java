@@ -26,12 +26,22 @@ class ExtractTextConductorWorkerTest {
     @InjectMocks
     private ExtractTextConductorWorker worker;
 
+    private static Task baseTask(String taskId, Map<String, Object> input) {
+        Task task = new Task();
+        task.setTaskId(taskId);
+        task.setWorkflowInstanceId("wf-1");
+        task.setStatus(Task.Status.IN_PROGRESS); // Required for TaskResult constructor
+        task.setReferenceTaskName("extract_text");
+        task.setInputData(input);
+        return task;
+    }
+
     @Test
     void execute_returnsConductorContractKeys() {
-        Task task = new Task();
-        task.setTaskId("task-1");
-        task.setWorkflowInstanceId("wf-1");
-        task.setInputData(Map.of("jobId", "job-1", "artifact", "file:///tmp/invoice.pdf"));
+        Task task = baseTask(
+                "task-1",
+                Map.of("jobId", "job-1", "artifact", "file:///tmp/invoice.pdf")
+        );
 
         when(textExtractionPipelineService.process(any())).thenReturn(
                 TextExtractionResultDto.builder()
@@ -57,10 +67,10 @@ class ExtractTextConductorWorkerTest {
 
     @Test
     void execute_onExtractionFailure_returnsStableErrorPayload() {
-        Task task = new Task();
-        task.setTaskId("task-2");
-        task.setWorkflowInstanceId("wf-1");
-        task.setInputData(Map.of("jobId", "job-1", "artifact", "missing.pdf"));
+        Task task = baseTask(
+                "task-2",
+                Map.of("jobId", "job-1", "artifact", "missing.pdf")
+        );
 
         when(textExtractionPipelineService.process(any()))
                 .thenThrow(new PipelineTaskException("ARTIFACT_NOT_FOUND", "Artifact missing"));
@@ -68,8 +78,10 @@ class ExtractTextConductorWorkerTest {
         TaskResult result = worker.execute(task);
 
         assertThat(result.getStatus()).isEqualTo(TaskResult.Status.FAILED);
-        assertThat(result.getOutputData()).containsEntry("errorCode", "ARTIFACT_NOT_FOUND");
-        assertThat(result.getOutputData()).containsEntry("errorMessage", "Artifact missing");
-        assertThat(result.getReasonForIncompletion()).isEqualTo("ARTIFACT_NOT_FOUND: Artifact missing");
+        assertThat(result.getOutputData())
+                .containsEntry("errorCode", "ARTIFACT_NOT_FOUND")
+                .containsEntry("errorMessage", "Artifact missing");
+        assertThat(result.getReasonForIncompletion())
+                .isEqualTo("ARTIFACT_NOT_FOUND: Artifact missing");
     }
 }
