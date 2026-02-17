@@ -1,9 +1,13 @@
 package com.example.agents.classificationworker.service;
 
 import com.example.agents.classificationworker.dto.PipelineStepRequestDto;
+import com.example.agents.classificationworker.entity.ClassificationArtifactEntity;
 import com.example.agents.classificationworker.entity.PipelineStepEntity;
+import com.example.agents.classificationworker.entity.TextArtifactEntity;
 import com.example.agents.classificationworker.mapper.IPipelineStepMapper;
+import com.example.agents.classificationworker.repository.IClassificationArtifactRepository;
 import com.example.agents.classificationworker.repository.IPipelineStepRepository;
+import com.example.agents.classificationworker.repository.ITextArtifactRepository;
 import com.example.agents.common.ai.OpenAiJsonClient;
 import com.example.agents.common.ai.OpenAiJsonClientException;
 import com.example.agents.common.ai.OpenAiJsonRequest;
@@ -14,13 +18,6 @@ import com.example.agents.common.enums.PipelineStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import jakarta.validation.ConstraintViolation;
-import jakarta.validation.Validator;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
-import lombok.Builder;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,39 +25,156 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PipelineStepService implements IPipelineStepService {
+    private static final String SCHEMA_NAME = "classification_document_type_v1";
+
     private final IPipelineStepRepository pipelineStepRepository;
     private final IPipelineStepMapper pipelineStepMapper;
+    private final ITextArtifactRepository textArtifactRepository;
+    private final IClassificationArtifactRepository classificationArtifactRepository;
     private final OpenAiJsonClient openAiJsonClient;
     private final ObjectMapper objectMapper;
-    private final Validator validator;
 
     @Value("${ai.operations.classification.max-text-chars:12000}")
     private int maxTextChars;
+
+    @Value("${ai.openai.model:gpt-4o-mini}")
+    private String openAiModel;
 
     @Override
     @Transactional
     public PipelineMessageDto process(PipelineStepRequestDto requestDto) {
         String idempotencyKey = requestDto.getJobId() + ":" + requestDto.getTaskType();
-        PipelineStepEntity entity = pipelineStepRepository.findByIdempotencyKey(idempotencyKey)
-                .orElseGet(() -> pipelineStepMapper.toEntity(requestDto));
+        Optional<PipelineStepEntity> existing = pipelineStepRepository.findByIdempotencyKey(idempotencyKey);
+        if (existing.isPresent() && existing.get().getPayloadJson() != null && !existing.get().getPayloadJson().isBlank()) {
+            PipelineStepEntity cached = existing.get();
+            cached.setUpdatedAt(OffsetDateTime.now());
+            pipelineStepRepository.save(cached);
+            return toMessage(cached);
+        }
 
-        String payload = entity.getId() == null && (entity.getPayloadJson() == null || entity.getPayloadJson().isBlank())
-                ? classifyPayload(requestDto)
-                : requestDto.getPayloadJson();
+        PipelineStepEntity entity = existing.orElseGet(() -> pipelineStepMapper.toEntity(requestDto));
+        ClassificationExecutionResult execution = classify(requestDto);
 
-        entity.setPayloadJson(payload);
+        entity.setPayloadJson(execution.outputJson());
         entity.setStatus(PipelineStatus.PROCESSED.name());
         entity.setUpdatedAt(OffsetDateTime.now());
         pipelineStepRepository.save(entity);
+
+        persistArtifact(entity.getJobId(), entity.getTaskType(), execution);
+        return toMessage(entity);
+    }
+
+    private ClassificationExecutionResult classify(PipelineStepRequestDto requestDto) {
+        long startMs = System.currentTimeMillis();
+        try {
+            JsonNode input = objectMapper.readTree(requestDto.getPayloadJson());
+            String artifactRef = input.path("textArtifact").asText("").trim();
+            if (artifactRef.isBlank()) {
+                throw new PipelineTaskException("INVALID_INPUT", "textArtifact is required");
+            }
+
+            String sourceText = resolveTextArtifact(artifactRef);
+            boolean inputTruncated = sourceText.length() > maxTextChars;
+            String boundedText = inputTruncated ? sourceText.substring(0, maxTextChars) : sourceText;
+
+            String requestId = UUID.randomUUID().toString();
+            OpenAiJsonResponse response = openAiJsonClient.completeJson(OpenAiJsonRequest.builder()
+                    .operation("classification")
+                    .schemaName(SCHEMA_NAME)
+                    .systemPrompt("Classify financial documents. Return only JSON with documentType.")
+                    .userPrompt("Classify this financial document text.\n\n" + boundedText)
+                    .jsonSchema(classificationSchema())
+                    .requestId(requestId)
+                    .jobId(requestDto.getJobId())
+                    .taskId(requestDto.getTaskType())
+                    .maxInputChars(maxTextChars)
+                    .build());
+
+            String documentType = mapDocumentType(response.getContent());
+            long durationMs = System.currentTimeMillis() - startMs;
+            ObjectNode output = objectMapper.createObjectNode();
+            output.put("documentType", documentType);
+            output.put("model", openAiModel);
+            output.put("durationMs", durationMs);
+            output.put("inputChars", boundedText.length());
+            output.put("outputChars", response.getOutputChars());
+            output.put("schemaName", SCHEMA_NAME);
+            output.put("requestId", requestId);
+            output.put("inputTruncated", inputTruncated || response.isInputTruncated());
+
+            return new ClassificationExecutionResult(
+                    objectMapper.writeValueAsString(output),
+                    objectMapper.writeValueAsString(response.getContent()),
+                    objectMapper.writeValueAsString(objectMapper.createObjectNode().put("documentType", documentType))
+            );
+        } catch (OpenAiJsonClientException ex) {
+            throw new PipelineTaskException(ex.getErrorCode().name(), "classification LLM call failed", ex);
+        } catch (PipelineTaskException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new PipelineTaskException("INVALID_INPUT", "classification payload parse failed", ex);
+        }
+    }
+
+    private String resolveTextArtifact(String artifactRef) {
+        String prefix = "text-artifact://";
+        if (!artifactRef.startsWith(prefix)) {
+            throw new PipelineTaskException("INVALID_INPUT", "unsupported textArtifact ref: " + artifactRef);
+        }
+        String rawId = artifactRef.substring(prefix.length());
+        long id;
+        try {
+            id = Long.parseLong(rawId);
+        } catch (NumberFormatException ex) {
+            throw new PipelineTaskException("INVALID_INPUT", "invalid textArtifact id: " + artifactRef, ex);
+        }
+        TextArtifactEntity artifact = textArtifactRepository.findById(id)
+                .orElseThrow(() -> new PipelineTaskException("ARTIFACT_NOT_FOUND", "text artifact not found: " + artifactRef));
+        if (artifact.getTextBody() == null || artifact.getTextBody().isBlank()) {
+            throw new PipelineTaskException("INVALID_INPUT", "resolved text artifact is blank: " + artifactRef);
+        }
+        return artifact.getTextBody();
+    }
+
+    private String mapDocumentType(JsonNode content) {
+        String documentType = content.path("documentType").asText("").trim();
+        if (documentType.isBlank()) {
+            throw new PipelineTaskException("INVALID_SCHEMA_OUTPUT", "documentType is missing from schema-valid output");
+        }
+        return documentType;
+    }
+
+    private JsonNode classificationSchema() {
+        ObjectNode schema = objectMapper.createObjectNode();
+        schema.put("type", "object");
+
+        ObjectNode properties = objectMapper.createObjectNode();
+        properties.set("documentType", objectMapper.createObjectNode().put("type", "string").put("minLength", 1));
+
+        schema.set("properties", properties);
+        schema.set("required", objectMapper.valueToTree(java.util.List.of("documentType")));
+        schema.put("additionalProperties", false);
+        return schema;
+    }
+
+    private void persistArtifact(String jobId, String taskType, ClassificationExecutionResult execution) {
+        ClassificationArtifactEntity artifact = new ClassificationArtifactEntity();
+        artifact.setJobId(jobId);
+        artifact.setTaskType(taskType);
+        artifact.setRawResponseJson(execution.rawResponseJson());
+        artifact.setMappedResultJson(execution.mappedResultJson());
+        artifact.setCreatedAt(OffsetDateTime.now());
+        classificationArtifactRepository.save(artifact);
+    }
+
+    private PipelineMessageDto toMessage(PipelineStepEntity entity) {
         return PipelineMessageDto.builder()
                 .jobId(entity.getJobId())
                 .taskType(entity.getTaskType())
@@ -71,108 +185,6 @@ public class PipelineStepService implements IPipelineStepService {
                 .build();
     }
 
-    private String classifyPayload(PipelineStepRequestDto requestDto) {
-        try {
-            JsonNode payload = objectMapper.readTree(requestDto.getPayloadJson());
-            String text = payload.path("text").asText("").trim();
-            if (text.isBlank()) {
-                throw new PipelineTaskException("INVALID_INPUT", "classification payload text is blank");
-            }
-            boolean inputTruncated = text.length() > maxTextChars;
-            String boundedText = inputTruncated ? text.substring(0, maxTextChars) : text;
-            List<String> labels = extractLabels(payload.path("candidateLabels"));
-            JsonNode schema = classificationSchema(labels);
-            String userPrompt = "Classify the text into one label from: " + labels + "\nText:\n" + boundedText +
-                    "\nReturn confidence between 0 and 1.";
-
-            OpenAiJsonResponse response = openAiJsonClient.completeJson(OpenAiJsonRequest.builder()
-                    .operation("classification")
-                    .schemaName("classification_response")
-                    .systemPrompt(classificationSystemPrompt(labels))
-                    .userPrompt(userPrompt)
-                    .jsonSchema(schema)
-                    .requestId(UUID.randomUUID().toString())
-                    .jobId(requestDto.getJobId())
-                    .taskId(requestDto.getTaskType())
-                    .maxInputChars(maxTextChars)
-                    .build());
-            ClassificationResult result = objectMapper.treeToValue(response.getContent(), ClassificationResult.class);
-            validateOutput(result);
-            ObjectNode output = objectMapper.valueToTree(result);
-            output.put("input_truncated", inputTruncated || response.isInputTruncated());
-            return objectMapper.writeValueAsString(output);
-        } catch (OpenAiJsonClientException ex) {
-            throw new PipelineTaskException(ex.getErrorCode().name(), "classification LLM call failed", ex);
-        } catch (PipelineTaskException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new PipelineTaskException("INVALID_INPUT", "classification payload parse failed", ex);
-        }
-    }
-
-    private void validateOutput(ClassificationResult result) {
-        Set<ConstraintViolation<ClassificationResult>> violations = validator.validate(result);
-        if (!violations.isEmpty()) {
-            throw new PipelineTaskException("INVALID_OUTPUT", violations.iterator().next().getMessage());
-        }
-    }
-
-    private List<String> extractLabels(JsonNode labelsNode) {
-        List<String> labels = new ArrayList<>();
-        if (labelsNode != null && labelsNode.isArray()) {
-            for (JsonNode node : labelsNode) {
-                labels.add(node.asText());
-            }
-        }
-        return labels.isEmpty()
-                ? List.of("invoice", "receipt", "bank_statement", "tax_document", "other")
-                : labels;
-    }
-
-    private String classificationSystemPrompt(List<String> labels) {
-        return "You are a senior financial document classification specialist. " +
-                "Output only JSON matching schema and never invent labels outside: " + labels;
-    }
-
-    private ObjectNode classificationSchema(List<String> labels) {
-
-        ObjectNode schema = objectMapper.createObjectNode();
-        schema.put("type", "object");
-
-        ObjectNode properties = objectMapper.createObjectNode();
-
-        ObjectNode labelNode = objectMapper.createObjectNode();
-        labelNode.put("type", "string");
-        labelNode.set("enum", objectMapper.valueToTree(labels));
-        properties.set("label", labelNode);
-
-        ObjectNode confidenceNode = objectMapper.createObjectNode();
-        confidenceNode.put("type", "number");
-        confidenceNode.put("minimum", 0);
-        confidenceNode.put("maximum", 1);
-        properties.set("confidence", confidenceNode);
-
-        ObjectNode reasonNode = objectMapper.createObjectNode();
-        reasonNode.put("type", "string");
-        reasonNode.put("minLength", 3);
-        properties.set("reason", reasonNode);
-
-        schema.set("properties", properties);
-        schema.set("required", objectMapper.valueToTree(List.of("label", "confidence", "reason")));
-        schema.put("additionalProperties", false);
-
-        return schema;
-    }
-
-    @Data
-    @Builder
-    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(builder = ClassificationResult.ClassificationResultBuilder.class)
-    private static class ClassificationResult {
-        @NotBlank String label;
-        @DecimalMin("0.0") @DecimalMax("1.0") double confidence;
-        @NotBlank String reason;
-
-        @com.fasterxml.jackson.databind.annotation.JsonPOJOBuilder(withPrefix = "")
-        public static class ClassificationResultBuilder {}
+    private record ClassificationExecutionResult(String outputJson, String rawResponseJson, String mappedResultJson) {
     }
 }
