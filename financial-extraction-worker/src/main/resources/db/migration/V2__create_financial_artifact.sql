@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS financial_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
-    canonical_json JSONB NOT NULL,
+    canonical_json jsonb not null,
     document_type VARCHAR(80) NOT NULL,
     currency VARCHAR(16),
     total_amount NUMERIC(19,4),

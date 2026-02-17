@@ -7,12 +7,15 @@ import com.example.agents.financialextractionworker.dto.FinancialExtractionReque
 import com.example.agents.financialextractionworker.dto.FinancialExtractionResultDto;
 import com.example.agents.financialextractionworker.entity.FinancialArtifactEntity;
 import com.example.agents.financialextractionworker.repository.FinancialArtifactRepository;
+import com.example.agents.financialextractionworker.testsupport.PostgresTestcontainersConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.List;
 
@@ -20,12 +23,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+@Testcontainers
 @SpringBootTest(properties = {
         "conductor.enabled=false",
         "spring.cloud.config.enabled=false",
         "ai.openai.api-key=test-key"
 })
 @ActiveProfiles("test")
+@Import(PostgresTestcontainersConfig.class)
 class FinancialExtractionServiceIntegrationTest {
 
     @Autowired
