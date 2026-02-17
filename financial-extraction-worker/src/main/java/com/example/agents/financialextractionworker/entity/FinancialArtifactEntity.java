@@ -25,7 +25,7 @@ public class FinancialArtifactEntity {
     @Column(name = "task_type", nullable = false, length = 120)
     private String taskType;
 
-    @Column(name = "canonical_json", nullable = false, columnDefinition = "JSONB")
+    @Column(name = "canonical_json", nullable = false, columnDefinition = "json")
     private String canonicalJson;
 
     @Column(name = "document_type", nullable = false, length = 80)
