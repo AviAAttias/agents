@@ -59,6 +59,9 @@ Worker-specific limits:
 - `CLASSIFICATION_MAX_TEXT_CHARS`
 - `FINANCIAL_EXTRACTION_MAX_TEXT_CHARS`
 - `TEXT_EXTRACTION_MAX_TEXT_CHARS`
+- `PDF_INGESTION_MAX_BYTES` (default `26214400`)
+- `PDF_INGESTION_TIMEOUT_MS` (default `15000`)
+- `PDF_INGESTION_ARTIFACTS_DIR` (default `artifacts`)
 
 Text extraction output contract (`extract_text`):
 - `text`
