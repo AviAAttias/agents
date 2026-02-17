@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "documentType",
+    "currency",
+    "periodStart",
+    "periodEnd",
+    "totalAmount",
+    "lineItems",
+    "confidence",
+    "provenance"
+  ],
+  "properties": {
+    "documentType": {
+      "type": "string",
+      "minLength": 1
+    },
+    "currency": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z]{3}$"
+    },
+    "periodStart": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "periodEnd": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "totalAmount": {
+      "type": ["number", "null"]
+    },
+    "lineItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description", "amount", "currency", "page"],
+        "properties": {
+          "description": { "type": "string", "minLength": 1 },
+          "amount": { "type": "number" },
+          "currency": { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" },
+          "page": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "schemaVersion"],
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "schemaVersion": { "type": "string", "const": "v1" }
+      }
+    }
+  }
+}
