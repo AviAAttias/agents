@@ -41,7 +41,7 @@ public class PipelineStepService implements IPipelineStepService {
     private final OpenAiJsonClient openAiJsonClient;
     private final ObjectMapper objectMapper;
 
-    @Value("${ai.operations.classification.max-text-chars:12000}")
+    @Value("${classification.worker.max-text-chars:${ai.operations.classification.max-text-chars:12000}}")
     private int maxTextChars;
 
     @Value("${ai.openai.model:gpt-4o-mini}")

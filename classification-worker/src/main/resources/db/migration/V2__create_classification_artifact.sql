@@ -7,7 +7,5 @@ CREATE TABLE IF NOT EXISTS classification_artifact (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS text_artifact (
-    id BIGINT PRIMARY KEY,
-    text_body TEXT NOT NULL
-);
+CREATE INDEX IF NOT EXISTS idx_classification_artifact_job_task
+    ON classification_artifact(job_id, task_type);
