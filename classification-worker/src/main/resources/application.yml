@@ -34,6 +34,7 @@ ai:
     retry:
       enabled: ${OPENAI_RETRY_ENABLED:true}
       max-attempts: ${OPENAI_RETRY_MAX_ATTEMPTS:1}
-  operations:
-    classification:
-      max-text-chars: ${CLASSIFICATION_MAX_TEXT_CHARS:12000}
+
+classification:
+  worker:
+    max-text-chars: ${CLASSIFICATION_MAX_TEXT_CHARS:12000}
