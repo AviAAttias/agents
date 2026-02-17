@@ -91,8 +91,13 @@ class PipelineStepServiceTest {
         when(pipelineStepRepository.findByIdempotencyKey("job-2:classify_doc")).thenReturn(Optional.empty());
         when(pipelineStepMapper.toEntity(request)).thenReturn(mapped);
         when(textArtifactRepository.findById(7L)).thenReturn(Optional.of(textArtifact));
+
+        var invalidContent = objectMapper.readTree("{}"); // compute outside Mockito chain
         when(openAiJsonClient.completeJson(any(OpenAiJsonRequest.class)))
-                .thenReturn(OpenAiJsonResponse.builder().content(objectMapper.readTree("{}")).outputChars(2).build());
+                .thenReturn(OpenAiJsonResponse.builder()
+                        .content(invalidContent)
+                        .outputChars(2)
+                        .build());
 
         assertThatThrownBy(() -> service.process(request))
                 .isInstanceOf(PipelineTaskException.class)
