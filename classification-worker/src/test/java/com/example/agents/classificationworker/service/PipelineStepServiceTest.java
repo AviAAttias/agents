@@ -61,11 +61,18 @@ class PipelineStepServiceTest {
         textArtifact.setId(42L);
         textArtifact.setTextBody("invoice text body");
 
+        // Build JsonNode BEFORE stubbing (do not do work inside when(...).thenReturn(...))
+        var contentNode = objectMapper.readTree("{\"documentType\":\"invoice\"}");
+
         when(pipelineStepRepository.findByIdempotencyKey("job-1:classify_doc")).thenReturn(Optional.empty());
         when(pipelineStepMapper.toEntity(request)).thenReturn(mapped);
         when(textArtifactRepository.findById(42L)).thenReturn(Optional.of(textArtifact));
+
         when(openAiJsonClient.completeJson(any(OpenAiJsonRequest.class)))
-                .thenReturn(OpenAiJsonResponse.builder().content(objectMapper.readTree("{\"documentType\":\"invoice\"}")).outputChars(26).build());
+                .thenReturn(OpenAiJsonResponse.builder()
+                        .content(contentNode)
+                        .outputChars(26)
+                        .build());
 
         var response = service.process(request);
 

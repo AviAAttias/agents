@@ -34,6 +34,7 @@ class ClassifyDocConductorWorkerTest {
                 .build());
 
         Task task = new Task();
+        task.setStatus(Task.Status.IN_PROGRESS); // <-- critical: prevents TaskResult ctor NPE
         task.setInputData(Map.of("jobId", "job-1", "textArtifact", "text-artifact://1"));
 
         TaskResult result = worker.execute(task);
