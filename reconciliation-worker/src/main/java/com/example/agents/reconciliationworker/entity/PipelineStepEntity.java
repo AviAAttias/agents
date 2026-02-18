@@ -25,7 +25,7 @@ public class PipelineStepEntity {
     @Column(name = "artifact_ref")
     private String artifactRef;
     @Lob
-    @Column(name = "payload_json")
+    @Column(name = "payload_json", nullable = false)
     private String payloadJson;
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;
