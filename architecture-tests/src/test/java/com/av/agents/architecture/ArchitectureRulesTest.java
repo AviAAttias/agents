@@ -33,7 +33,12 @@ class ArchitectureRulesTest {
 
   @Test
   void sharedEntitiesOwnedBySharedPersistenceModule() {
-    classes().that().haveSimpleNameIn("TextArtifactEntity", "FinancialArtifactEntity", "ValidationArtifactEntity", "ReportArtifactEntity", "ApprovalRequestEntity", "EmailDeliveryEntity")
+    classes().that().haveSimpleName("TextArtifactEntity")
+        .or().haveSimpleName("FinancialArtifactEntity")
+        .or().haveSimpleName("ValidationArtifactEntity")
+        .or().haveSimpleName("ReportArtifactEntity")
+        .or().haveSimpleName("ApprovalRequestEntity")
+        .or().haveSimpleName("EmailDeliveryEntity")
         .should().resideInAPackage("..sharedpersistence.entity..")
         .check(new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages("com.av.agents"));
