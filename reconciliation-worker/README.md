@@ -1,20 +1,34 @@
-# Reconciliation Worker
+# reconciliation-worker
 
-## Rule codes
-- `TOTAL_MISMATCH`: Sum of `lineItems[*].amount` differs from `totalAmount` beyond tolerance.
-- `REQUIRED_FIELD_MISSING`: Required field for `documentType` is missing.
-- `CURRENCY_MISMATCH`: Line item currency differs from document currency.
-- `INVALID_DATE_RANGE`: `periodStart` is after `periodEnd`.
-- `NEGATIVE_TOTAL_NOT_ALLOWED`: Negative totals are rejected unless doc type is explicitly allowed.
-- `WARN_UNKNOWN_DOC_TYPE`: Document type has no configured required-field profile.
+## Responsibility
 
-## Tolerance configuration
-- Absolute tolerance is controlled by `reconciliation.tolerance.abs`.
-- Default value: `0.01`.
-- `TOTAL_MISMATCH` is raised when `abs(totalAmount - sum(lineItems.amount)) > tolerance`.
+Validates and reconciles extracted financial values.
 
-## Extension mechanism for new rules
-1. Add rule evaluation logic in `ReconciliationService#evaluateCanonicalJson`.
-2. Emit a structured violation object through `violation(code, path, message)`.
-3. Add/update unit tests in `ReconciliationServiceTest` for the new code.
-4. If persistence schema changes are required, add a new Flyway migration under `src/main/resources/db/migration`.
+## Owned workflow/task contract
+
+- Conductor task(s): validate_reconcile
+- Input JSON: `{ "jobId": "...", "fields": { ... } }`
+Output JSON: `{ "isValid": <boolean>, "issues": [ ... ] }`
+
+## Env vars and config keys
+
+- `SPRING_PROFILES_ACTIVE`
+- `SPRING_CONFIG_IMPORT(optional when using config-server)`
+- `CONDUCTOR_SERVER_URL`
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+
+## Local run
+
+```bash
+mvn -pl reconciliation-worker spring-boot:run
+```
+
+## Tests
+
+```bash
+mvn -pl reconciliation-worker test
+```
+
+- Validates module unit/integration behavior and task contract serialization where applicable.

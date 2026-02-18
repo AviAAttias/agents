@@ -1,50 +1,49 @@
-# Financial Multi-Agent PDF Pipeline (Spring Boot + Netflix Conductor Workers)
+# Financial Multi-Agent PDF Pipeline
 
-## Repository Tree
+A multi-module Spring Boot project that processes financial PDFs through a Conductor-orchestrated workflow.
 
-```text
-.
-├── common-lib
-├── config-server
-├── pdf-ingestion-service
-├── text-extraction-worker
-├── classification-worker
-├── financial-extraction-worker
-├── reconciliation-worker
-├── reporting-worker
-├── approval-service
-├── notification-worker
-├── conductor/definitions/{tasks,workflows}
-├── helm/financial-pipeline
-├── samples/pdfs
-├── docker-compose.yml
-└── .github/workflows/ci.yml
-```
+## Modules
 
+| Module | Responsibility | Local run command | Conductor task(s) |
+|---|---|---|---|
+| `common-lib` | Shared DTOs, enums, OpenAI schema-first client, utility helpers | `mvn -pl common-lib test` | N/A (shared library) |
+| `config-server` | Central Spring Cloud Config service | `mvn -pl config-server spring-boot:run` | N/A |
+| `pdf-ingestion-service` | Ingests PDF payload metadata/artifact references | `mvn -pl pdf-ingestion-service spring-boot:run` | `ingest_pdf` |
+| `text-extraction-worker` | Extracts text from PDFs and stores text artifacts | `mvn -pl text-extraction-worker spring-boot:run` | `extract_text` |
+| `classification-worker` | Classifies extracted text into document types | `mvn -pl classification-worker spring-boot:run` | `classify_doc` |
+| `financial-extraction-worker` | Extracts structured financial fields from text | `mvn -pl financial-extraction-worker spring-boot:run` | `extract_financials` |
+| `reconciliation-worker` | Validates/reconciles extracted values | `mvn -pl reconciliation-worker spring-boot:run` | `validate_reconcile` |
+| `reporting-worker` | Produces final reporting artifacts | `mvn -pl reporting-worker spring-boot:run` | `generate_report` |
+| `approval-service` | Handles approval requests and reviewer decisions | `mvn -pl approval-service spring-boot:run` | `request_approval` |
+| `notification-worker` | Sends notification emails/events | `mvn -pl notification-worker spring-boot:run` | `send_email` |
 
-## Pipeline workers overview
+## Namespace / coordinates
 
-- `pdf-ingestion-service` (`ingest_pdf`): stores inbound PDF metadata/blob reference.
-- `text-extraction-worker` (`extract_text`): extracts embedded PDF text and returns `text` + `artifactRef` for downstream tasks.
-- `classification-worker` (`classify_doc`): classifies extracted text into document type.
-- `financial-extraction-worker` (`extract_financials`): extracts structured financial fields from text.
-- `reconciliation-worker` (`validate_reconcile`): validates and reconciles extracted values.
-- `reporting-worker` (`generate_report`): creates pipeline report artifacts.
-- `approval-service` / `notification-worker`: approval event + requester notification.
+- Maven `groupId`: `com.av.agents`
+- Java base package: `com.av.agents`
 
-`text-extraction-worker` currently uses PDFBox embedded-text extraction only (no OCR). For image-only PDFs, `extract_text.output.text` may be empty while `extract_text.output.artifactRef` is still produced.
+## Conductor dependency: external vs local
 
-## AI Integration
+This repository assumes **Conductor is external** (not embedded in module startup).
 
-### Modules using OpenAI JSON structured outputs
-- `classification-worker` (`classification` operation)
-- `financial-extraction-worker` (`financial_extraction` operation)
+Required environment/config:
 
-Both workers use shared `common-lib` `OpenAiJsonClient` with **schema-first strict output validation**.
+- `CONDUCTOR_SERVER_URL` (example: `http://localhost:8080/api`)
+- Task/workflow definitions from:
+  - `conductor/definitions/tasks/pipeline_tasks.json`
+  - `conductor/definitions/workflows/financial_pipeline_workflow.json`
 
-### Required configuration / env
-- `OPENAI_API_KEY` (required)
-- `OPENAI_BASE_URL` (optional, default `https://api.openai.com`)
+Minimal setup:
+
+1. Start supporting services (`docker compose up --build` for local infra/services).
+2. Start or point to a running Conductor server.
+3. Register task/workflow definitions in Conductor.
+4. Export worker/service environment variables (`CONDUCTOR_SERVER_URL`, DB/config vars, and AI vars when needed).
+
+## OpenAI structured-output settings
+
+- `OPENAI_API_KEY` (required for AI workers)
+- `OPENAI_BASE_URL` (default `https://api.openai.com`)
 - `OPENAI_MODEL` (default `gpt-4o-mini`)
 - `OPENAI_MAX_OUTPUT_TOKENS` (default `700`)
 - `OPENAI_MAX_INPUT_CHARS` (default `12000`)
@@ -54,75 +53,13 @@ Both workers use shared `common-lib` `OpenAiJsonClient` with **schema-first stri
 - `OPENAI_RETRY_ENABLED` (default `true`)
 - `OPENAI_RETRY_MAX_ATTEMPTS` (default `1`)
 
-
-Worker-specific limits:
-- `CLASSIFICATION_MAX_TEXT_CHARS`
-- `FINANCIAL_EXTRACTION_MAX_TEXT_CHARS`
-- `TEXT_EXTRACTION_MAX_TEXT_CHARS`
-- `PDF_INGESTION_MAX_BYTES` (default `26214400`)
-- `PDF_INGESTION_TIMEOUT_MS` (default `15000`)
-- `PDF_INGESTION_ARTIFACTS_DIR` (default `artifacts`)
-
-Text extraction output contract (`extract_text`):
-- `text`
-- `artifactRef` (`text-artifact://<id>`)
-- `textArtifact` (backward-compatible alias)
-- `inputBytes`, `outputChars`, `durationMs`, `wasTruncated`, `pageCount`
-
-### Schema validation behavior
-- Every call requires a JSON schema and schema name.
-- Model output is parsed as JSON and validated against the schema before mapping.
-- Failures are typed and surfaced (e.g. `INVALID_SCHEMA_OUTPUT`) with a bounded `schemaViolationSummary`.
-- No best-effort extraction/regex JSON parsing of model output.
-
-### Conductor retry interaction
-Conductor already retries tasks. The OpenAI client therefore defaults to **at most one client retry** and only for safe transient classes (`TIMEOUT`, transport/upstream 5xx) to avoid retry amplification.
-
-## Local Run
-
-### 1) Start platform services
-```bash
-docker compose up --build
-```
-
-This starts app services. Use your external/running Conductor instance for workflow/task execution.
-
-### 2) Import Conductor definitions
-- `conductor/definitions/tasks/pipeline_tasks.json`
-- `conductor/definitions/workflows/financial_pipeline_workflow.json`
-
-### 3) Configure API keys safely
-```bash
-export OPENAI_API_KEY='***'
-export OPENAI_MODEL='gpt-4o-mini'
-```
-Or use env files / secrets manager. Never commit keys.
-
-## Troubleshooting
-
-### Common OpenAI error codes
-- `RATE_LIMIT`: upstream 429, surfaced to Conductor
-- `TIMEOUT`: request or overall deadline exceeded
-- `INVALID_SCHEMA_OUTPUT`: output not JSON or schema-invalid
-- `UPSTREAM_5XX`: upstream 5xx from provider
-- `AUTH_CONFIG`: invalid/missing auth or config
-- `DISABLED`: OpenAI key absent
-
-### Logging + observability
-- Logs include structured fields: `jobId`, `workflowId`, `taskId`, `operation`, `model`, `requestId`, `durationMs`, `inputChars`, `outputChars`.
-- Prompt/output bodies are not logged; hash+length are logged.
-- Metrics emitted:
-  - `openai_requests_total{model,operation,status}`
-  - `openai_request_latency_seconds{model,operation}`
-  - `openai_schema_validation_failures_total{operation}`
-  - `openai_tokens_in_total`
-  - `openai_tokens_out_total`
-
-
-## How to run text-extraction-worker locally
+## Run and test from root
 
 ```bash
-docker compose up --build postgres config-server text-extraction-worker
+mvn -B clean verify
 ```
 
-Set `CONDUCTOR_SERVER_URL` to your Conductor API endpoint before starting when needed.
+## Notes
+
+- Package and coordinate namespace is standardized on `com.av.agents`.
+- Avoid committing secrets; provide credentials via environment variables or secret managers.

@@ -1,56 +1,37 @@
-# classification-worker AI operation
+# classification-worker
 
-## Conductor task
-- Task name: `classify_doc`
-- Inputs:
-  - `jobId`
-  - `textArtifact` (from `${extract_text.output.artifactRef}`)
-- Output contract:
-  - `documentType` (required)
-  - `model`, `durationMs`, `inputChars`, `outputChars`, `schemaName`, `requestId`
+## Responsibility
 
-## Schema ownership decision
-- `classification_pipeline_step` and `classification_artifact` are **owned by classification-worker**.
-- `text_artifact` is treated as a **shared cross-module table** produced by text-extraction.
-- Therefore this module does not create `text_artifact` in main migrations; tests provide a test-only Flyway migration for deterministic setup.
+Classifies extracted text into domain document classes.
 
-## Migration strategy
-- Flyway is the source of truth for schema.
-- Hibernate runs with `ddl-auto=validate` in app and tests.
-- Migrations in this module:
-  - `V1__create_pipeline_step.sql` => creates `classification_pipeline_step`
-  - `V2__create_classification_artifact.sql` => creates `classification_artifact`
+## Owned workflow/task contract
 
-## Payload storage strategy
-- JSON/text payload columns are mapped as `TEXT` (or compatible LONGVARCHAR semantics), not `@Lob`, to avoid H2/Postgres validation drift.
-- Examples:
-  - `classification_pipeline_step.payload_json`
-  - `classification_artifact.raw_response_json`
-  - `classification_artifact.mapped_result_json`
+- Conductor task(s): classify_doc
+- Input JSON: `{ "jobId": "...", "text": "..." }`
+Output JSON: `{ "documentType": "...", "confidence": <number> }`
 
-## Artifact resolution
-- `textArtifact` must use `text-artifact://<id>`.
-- The worker resolves the id from the shared `text_artifact` table and reads `text_body`.
-- If the artifact is missing, a typed `ARTIFACT_NOT_FOUND` failure is returned.
+## Env vars and config keys
 
-## Input constraints
-- Max text chars: `CLASSIFICATION_MAX_TEXT_CHARS` (mapped to `classification.worker.max-text-chars`, default `12000`).
-- Text is deterministically truncated before the model call when it exceeds the limit.
+- `SPRING_PROFILES_ACTIVE`
+- `SPRING_CONFIG_IMPORT(optional when using config-server)`
+- `CONDUCTOR_SERVER_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL(optional)`
+- `OPENAI_BASE_URL(optional)`
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
 
-## OpenAI schema + versioning
-- Operation name: `classification`
-- Uses `OpenAiJsonClient` (`common-lib`) with strict schema-first JSON validation.
-- Current schema name: `classification_document_type_v1`
-- Versioning rule: introduce a new schema name suffix (for example `_v2`) when required properties or semantics change.
+## Local run
 
-## Persistence + idempotency
-- Idempotency key: `(jobId, taskType)`
-- On retry, cached `classification_pipeline_step.payload_json` is returned without re-calling OpenAI.
-- Each fresh classification persists one `classification_artifact` row containing:
-  - full model response JSON
-  - validated mapped result JSON (`documentType`)
+```bash
+mvn -pl classification-worker spring-boot:run
+```
 
-## Run tests (module)
+## Tests
+
 ```bash
 mvn -pl classification-worker test
 ```
+
+- Validates module unit/integration behavior and task contract serialization where applicable.
