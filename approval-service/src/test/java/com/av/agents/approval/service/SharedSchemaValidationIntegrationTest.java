@@ -18,7 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
     "spring.flyway.default-schema=public",
     "spring.flyway.schemas=public",
     "spring.jpa.properties.hibernate.default_schema=public",
-    "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false;INIT=CREATE SCHEMA IF NOT EXISTS public\\;SET SCHEMA public",
+    "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "spring.datasource.username=sa",
     "spring.datasource.password=",
     "spring.jpa.hibernate.ddl-auto=validate",
