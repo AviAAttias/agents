@@ -16,15 +16,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class NotificationServiceGreenMailIntegrationTest {
 
+    private static final int SMTP_PORT = 3025;
+
     @RegisterExtension
     static GreenMailExtension greenMail =
-            new GreenMailExtension(new ServerSetup(0, "127.0.0.1", ServerSetup.PROTOCOL_SMTP))
+            new GreenMailExtension(new ServerSetup(SMTP_PORT, "127.0.0.1", ServerSetup.PROTOCOL_SMTP))
                     .withConfiguration(GreenMailConfiguration.aConfig().withDisabledAuthentication());
 
     @DynamicPropertySource
     static void mailProps(DynamicPropertyRegistry registry) {
         registry.add("spring.mail.host", () -> "127.0.0.1");
-        registry.add("spring.mail.port", () -> greenMail.getSmtp().getPort());
+        registry.add("spring.mail.port", () -> SMTP_PORT);
         registry.add("spring.mail.properties.mail.smtp.auth", () -> "false");
         registry.add("spring.mail.properties.mail.smtp.starttls.enable", () -> "false");
     }
