@@ -16,7 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest;
     "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "spring.datasource.username=sa",
     "spring.datasource.password=",
-    "spring.jpa.hibernate.ddl-auto=validate"
+    "spring.jpa.hibernate.ddl-auto=validate",
+    "logging.level.org.flywaydb=DEBUG"
 })
 class SharedSchemaValidationIntegrationTest {
 
