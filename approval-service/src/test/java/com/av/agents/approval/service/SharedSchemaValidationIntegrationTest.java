@@ -6,16 +6,12 @@ import com.av.agents.sharedpersistence.entity.ApprovalRequestEntity;
 import com.av.agents.sharedpersistence.entity.ApprovalStatus;
 import com.av.agents.sharedpersistence.repository.IApprovalRequestRepository;
 import java.time.Instant;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.test.context.ContextConfiguration;
 
 @SpringBootTest(properties = {
-    "spring.flyway.enabled=false",
+    "spring.flyway.enabled=true",
     "spring.flyway.locations=classpath:db/migration",
     "spring.flyway.validate-on-migrate=true",
     "spring.flyway.fail-on-missing-locations=true",
@@ -25,7 +21,6 @@ import org.springframework.test.context.ContextConfiguration;
     "spring.jpa.hibernate.ddl-auto=validate",
     "logging.level.org.flywaydb=DEBUG"
 })
-@ContextConfiguration(initializers = SharedSchemaValidationIntegrationTest.FlywayContextInitializer.class)
 class SharedSchemaValidationIntegrationTest {
 
   @Autowired
@@ -41,24 +36,5 @@ class SharedSchemaValidationIntegrationTest {
     ApprovalRequestEntity saved = repository.saveAndFlush(entity);
     assertThat(saved.getId()).isNotNull();
     assertThat(repository.findByJobId("job-it-1")).isPresent();
-  }
-
-  static class FlywayContextInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
-    @Override
-    public void initialize(ConfigurableApplicationContext applicationContext) {
-      String url = applicationContext.getEnvironment().getProperty("spring.datasource.url");
-      String username = applicationContext.getEnvironment().getProperty("spring.datasource.username", "sa");
-      String password = applicationContext.getEnvironment().getProperty("spring.datasource.password", "");
-
-      Flyway flyway = Flyway.configure()
-          .locations("classpath:db/migration")
-          .validateOnMigrate(true)
-          .failOnMissingLocations(true)
-          .cleanDisabled(false)
-          .dataSource(url, username, password)
-          .load();
-      flyway.clean();
-      flyway.migrate();
-    }
   }
 }
