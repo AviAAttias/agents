@@ -17,7 +17,6 @@ import org.springframework.boot.test.context.SpringBootTest;
     "spring.datasource.username=sa",
     "spring.datasource.password=",
     "spring.jpa.hibernate.ddl-auto=validate",
-    "spring.jpa.defer-datasource-initialization=true",
     "logging.level.org.flywaydb=DEBUG"
 })
 class SharedSchemaValidationIntegrationTest {
