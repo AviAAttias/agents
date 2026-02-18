@@ -1,6 +1,8 @@
 package com.example.agents.notificationworker.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -24,8 +26,8 @@ public class PipelineStepEntity {
     private String status;
     @Column(name = "artifact_ref")
     private String artifactRef;
-    @Lob
-    @Column(name = "payload_json")
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "payload_json", columnDefinition = "text")
     private String payloadJson;
     @Column(name = "idempotency_key", nullable = false)
     private String idempotencyKey;

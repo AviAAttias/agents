@@ -5,7 +5,6 @@ import com.example.agents.notificationworker.dto.PipelineStepRequestDto;
 import com.example.agents.notificationworker.entity.EmailDeliveryEntity;
 import com.example.agents.notificationworker.repository.EmailDeliveryRepository;
 import com.example.agents.notificationworker.service.INotificationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,8 +25,11 @@ class NotificationWorkerTest {
     @Mock
     private INotificationService notificationService;
 
+    @org.mockito.Spy
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
     @InjectMocks
-    private NotificationWorker notificationWorker = new NotificationWorker(emailDeliveryRepository, notificationService, new ObjectMapper());
+    private NotificationWorker notificationWorker;
 
     @Test
     void process_preventsDuplicateResend() {
