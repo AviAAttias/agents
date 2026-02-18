@@ -2,7 +2,7 @@ package com.example.agents.reportingworker.facade;
 
 import com.example.agents.common.dto.PipelineMessageDto;
 import com.example.agents.reportingworker.dto.PipelineStepRequestDto;
-import com.example.agents.reportingworker.service.IPipelineStepService;
+import com.example.agents.reportingworker.service.ReportGenerationWorker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,20 +17,20 @@ import static org.mockito.Mockito.when;
 class PipelineFacadeTest {
 
     @Mock
-    private IPipelineStepService pipelineStepService;
+    private ReportGenerationWorker reportGenerationWorker;
 
     @InjectMocks
-    private PipelineFacade facade;
+    private ReportGenerationFacade facade;
 
     @Test
-    void process_delegatesToPipelineStepService() {
+    void process_delegatesToWorker() {
         PipelineStepRequestDto request = new PipelineStepRequestDto();
         PipelineMessageDto expected = PipelineMessageDto.builder().jobId("job-1").build();
-        when(pipelineStepService.process(request)).thenReturn(expected);
+        when(reportGenerationWorker.process(request)).thenReturn(expected);
 
         PipelineMessageDto result = facade.process(request);
 
         assertThat(result).isSameAs(expected);
-        verify(pipelineStepService).process(request);
+        verify(reportGenerationWorker).process(request);
     }
 }
