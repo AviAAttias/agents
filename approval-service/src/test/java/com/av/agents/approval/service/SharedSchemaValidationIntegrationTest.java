@@ -13,6 +13,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(properties = {
     "spring.flyway.enabled=true",
     "spring.flyway.locations=classpath:db/migration",
+    "spring.flyway.validate-on-migrate=true",
+    "spring.flyway.fail-on-missing-locations=true",
     "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "spring.datasource.username=sa",
     "spring.datasource.password=",
