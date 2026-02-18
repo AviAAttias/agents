@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-public class LoggingConductorEventPublisher implements ConductorEventPublisher {
+public class LoggingConductorEventPublisher implements IConductorEventPublisher {
 
   @Override
   public void publish(String eventName, Map<String, Object> payload) {

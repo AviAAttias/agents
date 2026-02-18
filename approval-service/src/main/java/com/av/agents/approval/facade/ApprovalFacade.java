@@ -1,6 +1,6 @@
 package com.av.agents.approval.facade;
 
-import com.av.agents.approval.domain.ApprovalRequestEntity;
+import com.av.agents.sharedpersistence.entity.ApprovalRequestEntity;
 import com.av.agents.approval.service.ApprovalDecision;
 import com.av.agents.approval.service.CreateApprovalRequest;
 import com.av.agents.approval.service.DecisionResult;

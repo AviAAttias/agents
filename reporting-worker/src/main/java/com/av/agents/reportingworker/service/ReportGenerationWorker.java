@@ -3,8 +3,8 @@ package com.av.agents.reportingworker.service;
 import com.av.agents.common.dto.PipelineMessageDto;
 import com.av.agents.common.enums.PipelineStatus;
 import com.av.agents.reportingworker.dto.PipelineStepRequestDto;
-import com.av.agents.reportingworker.entity.ReportArtifactEntity;
-import com.av.agents.reportingworker.repository.ReportArtifactRepository;
+import com.av.agents.sharedpersistence.entity.ReportArtifactEntity;
+import com.av.agents.sharedpersistence.repository.IReportArtifactRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
 @Component
 @RequiredArgsConstructor
 public class ReportGenerationWorker {
-    private final ReportArtifactRepository reportArtifactRepository;
+    private final IReportArtifactRepository reportArtifactRepository;
     private final IReportGenerationService reportGenerationService;
 
     @Transactional

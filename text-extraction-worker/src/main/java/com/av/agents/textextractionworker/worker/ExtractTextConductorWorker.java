@@ -3,7 +3,7 @@ package com.av.agents.textextractionworker.worker;
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.textextractionworker.dto.TextExtractionRequestDto;
 import com.av.agents.textextractionworker.dto.TextExtractionResultDto;
-import com.av.agents.textextractionworker.service.TextExtractionPipelineService;
+import com.av.agents.textextractionworker.service.ITextExtractionPipelineService;
 import com.netflix.conductor.client.worker.Worker;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
@@ -20,7 +20,7 @@ import java.util.Map;
 public class ExtractTextConductorWorker implements Worker {
     private static final String TASK_NAME = "extract_text";
 
-    private final TextExtractionPipelineService textExtractionPipelineService;
+    private final ITextExtractionPipelineService textExtractionPipelineService;
 
     @Override
     public String getTaskDefName() {

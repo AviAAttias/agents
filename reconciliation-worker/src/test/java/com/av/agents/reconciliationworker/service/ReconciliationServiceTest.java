@@ -1,9 +1,9 @@
 package com.av.agents.reconciliationworker.service;
 
 import com.av.agents.reconciliationworker.dto.ReconciliationResultDto;
-import com.av.agents.reconciliationworker.entity.ValidationArtifactEntity;
-import com.av.agents.reconciliationworker.repository.FinancialArtifactRepository;
-import com.av.agents.reconciliationworker.repository.ValidationArtifactRepository;
+import com.av.agents.sharedpersistence.entity.ValidationArtifactEntity;
+import com.av.agents.reconciliationworker.repository.IFinancialArtifactRepository;
+import com.av.agents.sharedpersistence.repository.IValidationArtifactRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,9 +26,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ReconciliationServiceTest {
     @Mock
-    private FinancialArtifactRepository financialArtifactRepository;
+    private IFinancialArtifactRepository financialArtifactRepository;
     @Mock
-    private ValidationArtifactRepository validationArtifactRepository;
+    private IValidationArtifactRepository validationArtifactRepository;
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
     @InjectMocks

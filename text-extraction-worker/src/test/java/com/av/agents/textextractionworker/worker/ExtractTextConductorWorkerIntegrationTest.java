@@ -1,9 +1,9 @@
 package com.av.agents.textextractionworker.worker;
 
 import com.av.agents.textextractionworker.entity.PipelineStepEntity;
-import com.av.agents.textextractionworker.entity.TextArtifactEntity;
+import com.av.agents.sharedpersistence.entity.TextArtifactEntity;
 import com.av.agents.textextractionworker.repository.IPipelineStepRepository;
-import com.av.agents.textextractionworker.repository.ITextArtifactRepository;
+import com.av.agents.sharedpersistence.repository.ITextArtifactRepository;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
 import org.junit.jupiter.api.Test;

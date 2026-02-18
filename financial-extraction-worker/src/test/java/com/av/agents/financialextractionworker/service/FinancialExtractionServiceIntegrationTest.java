@@ -5,8 +5,8 @@ import com.av.agents.common.ai.OpenAiJsonRequest;
 import com.av.agents.common.ai.OpenAiJsonResponse;
 import com.av.agents.financialextractionworker.dto.FinancialExtractionRequestDto;
 import com.av.agents.financialextractionworker.dto.FinancialExtractionResultDto;
-import com.av.agents.financialextractionworker.entity.FinancialArtifactEntity;
-import com.av.agents.financialextractionworker.repository.FinancialArtifactRepository;
+import com.av.agents.sharedpersistence.entity.FinancialArtifactEntity;
+import com.av.agents.sharedpersistence.repository.IFinancialArtifactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +32,7 @@ class FinancialExtractionServiceIntegrationTest {
     private FinancialExtractionService service;
 
     @Autowired
-    private FinancialArtifactRepository repository;
+    private IFinancialArtifactRepository repository;
 
     @Autowired
     private ObjectMapper objectMapper;

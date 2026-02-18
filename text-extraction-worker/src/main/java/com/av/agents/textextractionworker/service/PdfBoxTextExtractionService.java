@@ -20,7 +20,7 @@ import java.util.HexFormat;
 
 @Service
 @RequiredArgsConstructor
-public class PdfBoxTextExtractionService implements PdfTextExtractionService {
+public class PdfBoxTextExtractionService implements IPdfTextExtractionService {
     private final MeterRegistry meterRegistry;
     private final ArtifactResolver artifactResolver;
 

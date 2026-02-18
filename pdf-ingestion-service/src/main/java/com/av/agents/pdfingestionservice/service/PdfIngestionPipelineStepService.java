@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PdfIngestionPipelineStepService implements PdfIngestionPipelineService {
+public class PdfIngestionPipelineStepService implements IPdfIngestionPipelineService {
     private static final String TASK_TYPE = "ingest_pdf";
 
     private final IPipelineStepRepository pipelineStepRepository;

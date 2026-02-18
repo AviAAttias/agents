@@ -14,5 +14,12 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+      - name: Guard against target artifacts
+        run: |
+          if find . -type d -name target | grep -q .; then
+            echo "target/ artifacts found in workspace";
+            find . -type d -name target;
+            exit 1;
+          fi
       - name: Build and test
         run: mvn -B clean verify

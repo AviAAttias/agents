@@ -8,6 +8,9 @@
 
   <modules>
     <module>common-lib</module>
+    <module>shared-persistence-lib</module>
+    <module>db-migrations</module>
+    <module>architecture-tests</module>
     <module>config-server</module>
     <module>pdf-ingestion-service</module>
     <module>text-extraction-worker</module>

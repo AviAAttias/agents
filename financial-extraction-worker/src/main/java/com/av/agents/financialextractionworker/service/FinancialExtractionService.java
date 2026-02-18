@@ -8,8 +8,8 @@ import com.av.agents.common.ai.OpenAiJsonResponse;
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.financialextractionworker.dto.FinancialExtractionRequestDto;
 import com.av.agents.financialextractionworker.dto.FinancialExtractionResultDto;
-import com.av.agents.financialextractionworker.entity.FinancialArtifactEntity;
-import com.av.agents.financialextractionworker.repository.FinancialArtifactRepository;
+import com.av.agents.sharedpersistence.entity.FinancialArtifactEntity;
+import com.av.agents.sharedpersistence.repository.IFinancialArtifactRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -41,7 +41,7 @@ public class FinancialExtractionService implements IFinancialExtractionService {
     private static final String SCHEMA_VERSION = "v1";
 
     private final OpenAiJsonClient openAiJsonClient;
-    private final FinancialArtifactRepository financialArtifactRepository;
+    private final IFinancialArtifactRepository financialArtifactRepository;
     private final ObjectMapper objectMapper;
 
     @Value("classpath:schema/financial-extraction-v1.json")
