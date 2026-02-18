@@ -2,7 +2,7 @@ package com.example.agents.notificationworker.service;
 
 import com.icegreen.greenmail.configuration.GreenMailConfiguration;
 import com.icegreen.greenmail.junit5.GreenMailExtension;
-import com.icegreen.greenmail.util.ServerSetupTest;
+import com.icegreen.greenmail.util.ServerSetup;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -17,8 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class NotificationServiceGreenMailIntegrationTest {
 
     @RegisterExtension
-    static GreenMailExtension greenMail = new GreenMailExtension(ServerSetupTest.SMTP)
-            .withConfiguration(GreenMailConfiguration.aConfig().withDisabledAuthentication());
+    static GreenMailExtension greenMail = new GreenMailExtension(
+            new ServerSetup(0, "127.0.0.1", ServerSetup.PROTOCOL_SMTP)
+    ).withConfiguration(GreenMailConfiguration.aConfig().withDisabledAuthentication());
 
     @DynamicPropertySource
     static void mailProps(DynamicPropertyRegistry registry) {
@@ -28,7 +29,6 @@ class NotificationServiceGreenMailIntegrationTest {
         registry.add("spring.mail.password", () -> "");
         registry.add("spring.mail.properties.mail.smtp.auth", () -> "false");
         registry.add("spring.mail.properties.mail.smtp.starttls.enable", () -> "false");
-        registry.add("EMAIL_FROM", () -> "noreply@example.com");
     }
 
     @Autowired
