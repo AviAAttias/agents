@@ -19,6 +19,7 @@ Artifact parsing/resolution is delegated to `common-lib` (`ArtifactRef` + `Artif
 
 ## IO hardening config
 
+- Global resolver cap: `artifacts.max-bytes` (default `10485760`, i.e. 10 MiB)
 - `TEXT_EXTRACTION_MAX_INPUT_BYTES` (default `26214400`)
 - `TEXT_EXTRACTION_CONNECT_TIMEOUT_MS` (default `5000`)
 - `TEXT_EXTRACTION_READ_TIMEOUT_MS` (default `10000`)

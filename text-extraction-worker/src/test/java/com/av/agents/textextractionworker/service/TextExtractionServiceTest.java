@@ -1,6 +1,8 @@
 package com.av.agents.textextractionworker.service;
 
 import com.av.agents.common.ai.PipelineTaskException;
+import com.av.agents.common.artifacts.ArtifactProperties;
+import com.av.agents.common.artifacts.ArtifactResolver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -27,7 +29,8 @@ class TextExtractionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PdfBoxTextExtractionService(new SimpleMeterRegistry());
+        ArtifactResolver resolver = new ArtifactResolver(new ArtifactProperties(), 5000, 10000);
+        service = new PdfBoxTextExtractionService(new SimpleMeterRegistry(), resolver);
         ReflectionTestUtils.setField(service, "maxTextChars", 12000);
     }
 

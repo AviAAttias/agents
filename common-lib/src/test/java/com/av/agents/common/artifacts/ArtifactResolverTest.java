@@ -39,7 +39,7 @@ class ArtifactResolverTest {
         Path path = tempDir.resolve("sample.txt");
         Files.writeString(path, "hello");
 
-        ArtifactResolver resolver = ArtifactResolver.defaultResolver(1000, 1000);
+        ArtifactResolver resolver = new ArtifactResolver(new ArtifactProperties(), 1000, 1000);
         byte[] bytes = resolver.readBytes(ArtifactRef.parse(path.toUri().toString()), 100);
 
         assertThat(new String(bytes, StandardCharsets.UTF_8)).isEqualTo("hello");
@@ -50,10 +50,22 @@ class ArtifactResolverTest {
         server.createContext("/sample", exchange -> writeResponse(exchange, "ok"));
         String url = "http://localhost:" + server.getAddress().getPort() + "/sample";
 
-        ArtifactResolver resolver = ArtifactResolver.defaultResolver(2000, 2000);
+        ArtifactResolver resolver = new ArtifactResolver(new ArtifactProperties(), 2000, 2000);
         byte[] bytes = resolver.readBytes(ArtifactRef.parse(url), 100);
 
         assertThat(new String(bytes, StandardCharsets.UTF_8)).isEqualTo("ok");
+    }
+
+
+    @Test
+    void readBytes_enforcesConfiguredDefaultEvenWhenCallsiteLimitIsLarger() {
+        server.createContext("/bigger", exchange -> writeResponse(exchange, "0123456789"));
+        String url = "http://localhost:" + server.getAddress().getPort() + "/bigger";
+
+        ArtifactResolver resolver = new ArtifactResolver(new ArtifactProperties(8), 2000, 2000);
+        assertThatThrownBy(() -> resolver.readBytes(ArtifactRef.parse(url), 1024))
+                .isInstanceOf(ArtifactResolutionException.class)
+                .hasMessageContaining("exceeds max bytes: 8");
     }
 
     @Test
@@ -61,7 +73,7 @@ class ArtifactResolverTest {
         server.createContext("/big", exchange -> writeResponse(exchange, "0123456789"));
         String url = "http://localhost:" + server.getAddress().getPort() + "/big";
 
-        ArtifactResolver resolver = ArtifactResolver.defaultResolver(2000, 2000);
+        ArtifactResolver resolver = new ArtifactResolver(new ArtifactProperties(), 2000, 2000);
         assertThatThrownBy(() -> resolver.readBytes(ArtifactRef.parse(url), 5))
                 .isInstanceOf(ArtifactResolutionException.class)
                 .hasMessageContaining("exceeds max bytes");

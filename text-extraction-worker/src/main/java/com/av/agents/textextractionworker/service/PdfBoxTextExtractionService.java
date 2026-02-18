@@ -22,6 +22,7 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class PdfBoxTextExtractionService implements PdfTextExtractionService {
     private final MeterRegistry meterRegistry;
+    private final ArtifactResolver artifactResolver;
 
     @Value("${TEXT_EXTRACTION_MAX_TEXT_CHARS:12000}")
     private int maxTextChars;
@@ -29,11 +30,6 @@ public class PdfBoxTextExtractionService implements PdfTextExtractionService {
     @Value("${TEXT_EXTRACTION_MAX_INPUT_BYTES:26214400}")
     private long maxInputBytes;
 
-    @Value("${TEXT_EXTRACTION_CONNECT_TIMEOUT_MS:5000}")
-    private int connectTimeoutMs;
-
-    @Value("${TEXT_EXTRACTION_READ_TIMEOUT_MS:10000}")
-    private int readTimeoutMs;
 
     @Override
     public ExtractionResult extract(String artifactRef) {
@@ -66,9 +62,8 @@ public class PdfBoxTextExtractionService implements PdfTextExtractionService {
 
     private byte[] loadPdfBytes(String artifactRefRaw) {
         try {
-            ArtifactResolver resolver = ArtifactResolver.defaultResolver(connectTimeoutMs, readTimeoutMs);
             ArtifactRef ref = ArtifactRef.parse(artifactRefRaw);
-            return resolver.readBytes(ref, maxInputBytes);
+            return artifactResolver.readBytes(ref, maxInputBytes);
         } catch (ArtifactResolutionException ex) {
             throw new PipelineTaskException("ARTIFACT_READ_FAILED", ex.getMessage(), ex);
         }

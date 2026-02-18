@@ -1,6 +1,7 @@
 package com.av.agents.pdfingestionservice.service;
 
 import com.av.agents.common.ai.PipelineTaskException;
+import com.av.agents.common.artifacts.ArtifactProperties;
 import com.av.agents.common.artifacts.ArtifactRef;
 import com.av.agents.common.artifacts.ArtifactResolver;
 import com.av.agents.pdfingestionservice.repository.IPdfArtifactRepository;
@@ -83,7 +84,7 @@ class PdfIngestionServiceTest {
         assertThat(first.artifactRef()).startsWith("file://");
         assertThat(Path.of(java.net.URI.create(first.artifactRef())).getFileName().toString()).isEqualTo(first.sha256() + ".pdf");
 
-        ArtifactResolver resolver = ArtifactResolver.defaultResolver(1000, 1000);
+        ArtifactResolver resolver = new ArtifactResolver(new ArtifactProperties(), 1000, 1000);
         byte[] resolvedBytes = resolver.readBytes(ArtifactRef.parse(first.artifactRef()), 4096);
         assertThat(resolvedBytes).isEqualTo(pdfBytes);
     }

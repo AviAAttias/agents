@@ -15,6 +15,8 @@ The pipeline passes artifacts only through explicit `artifactRef` values.
 
 Shared parsing/resolution primitives are in `common-lib`:
 
+- Default global artifact byte cap: `artifacts.max-bytes=10485760` (10 MiB) unless overridden.
+
 - `com.av.agents.common.artifacts.ArtifactRef`
 - `com.av.agents.common.artifacts.ArtifactResolver`
 - `com.av.agents.common.artifacts.ArtifactResolutionException`
