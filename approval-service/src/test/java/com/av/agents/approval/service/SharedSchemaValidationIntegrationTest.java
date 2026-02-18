@@ -50,13 +50,15 @@ class SharedSchemaValidationIntegrationTest {
       String username = applicationContext.getEnvironment().getProperty("spring.datasource.username", "sa");
       String password = applicationContext.getEnvironment().getProperty("spring.datasource.password", "");
 
-      Flyway.configure()
+      Flyway flyway = Flyway.configure()
           .locations("classpath:db/migration")
           .validateOnMigrate(true)
           .failOnMissingLocations(true)
+          .cleanDisabled(false)
           .dataSource(url, username, password)
-          .load()
-          .migrate();
+          .load();
+      flyway.clean();
+      flyway.migrate();
     }
   }
 }
