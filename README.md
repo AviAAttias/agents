@@ -2,14 +2,33 @@
 
 A multi-module Spring Boot project that processes financial PDFs through a Conductor-orchestrated workflow.
 
+## Artifact reference contract
+
+The pipeline passes artifacts only through explicit `artifactRef` values.
+
+- `file://...` → file-system artifact URI (primary transport for binary artifacts like PDFs)
+- `http(s)://...` → remote artifact URI (resolved with connect/read timeouts and byte caps)
+- `text-artifact://<id>` → text artifact identifier (DB-backed module contract)
+- `fin:<id>` → financial extraction artifact identifier (DB-backed module contract)
+- `val:<id>` → reconciliation/validation artifact identifier (DB-backed module contract)
+- `report:<id>` → report artifact identifier (DB-backed module contract)
+
+Shared parsing/resolution primitives are in `common-lib`:
+
+- Default global artifact byte cap: `artifacts.max-bytes=10485760` (10 MiB) unless overridden.
+
+- `com.av.agents.common.artifacts.ArtifactRef`
+- `com.av.agents.common.artifacts.ArtifactResolver`
+- `com.av.agents.common.artifacts.ArtifactResolutionException`
+
 ## Modules
 
 | Module | Responsibility | Local run command | Conductor task(s) |
 |---|---|---|---|
-| `common-lib` | Shared DTOs, enums, OpenAI schema-first client, utility helpers | `mvn -pl common-lib test` | N/A (shared library) |
+| `common-lib` | Shared contracts/resolvers/DTOs/helpers | `mvn -pl common-lib test` | N/A |
 | `config-server` | Central Spring Cloud Config service | `mvn -pl config-server spring-boot:run` | N/A |
-| `pdf-ingestion-service` | Ingests PDF payload metadata/artifact references | `mvn -pl pdf-ingestion-service spring-boot:run` | `ingest_pdf` |
-| `text-extraction-worker` | Extracts text from PDFs and stores text artifacts | `mvn -pl text-extraction-worker spring-boot:run` | `extract_text` |
+| `pdf-ingestion-service` | Downloads PDF, writes artifact file, emits resolvable PDF `artifactRef` | `mvn -pl pdf-ingestion-service spring-boot:run` | `ingest_pdf` |
+| `text-extraction-worker` | Reads PDF artifact ref and extracts text with bounded IO | `mvn -pl text-extraction-worker spring-boot:run` | `extract_text` |
 | `classification-worker` | Classifies extracted text into document types | `mvn -pl classification-worker spring-boot:run` | `classify_doc` |
 | `financial-extraction-worker` | Extracts structured financial fields from text | `mvn -pl financial-extraction-worker spring-boot:run` | `extract_financials` |
 | `reconciliation-worker` | Validates/reconciles extracted values | `mvn -pl reconciliation-worker spring-boot:run` | `validate_reconcile` |
@@ -33,27 +52,15 @@ Required environment/config:
   - `conductor/definitions/tasks/pipeline_tasks.json`
   - `conductor/definitions/workflows/financial_pipeline_workflow.json`
 
-Minimal setup:
+## Local end-to-end outline
 
-1. Start supporting services (`docker compose up --build` for local infra/services).
-2. Start or point to a running Conductor server.
-3. Register task/workflow definitions in Conductor.
-4. Export worker/service environment variables (`CONDUCTOR_SERVER_URL`, DB/config vars, and AI vars when needed).
+1. Start infra/services (`docker compose up --build`).
+2. Start or connect to a running Conductor server.
+3. Register Conductor task/workflow definitions.
+4. Start all modules (or relevant subset) with shared config.
+5. Submit workflow input with `jobId`, `pdfUrl`, requester metadata.
 
-## OpenAI structured-output settings
-
-- `OPENAI_API_KEY` (required for AI workers)
-- `OPENAI_BASE_URL` (default `https://api.openai.com`)
-- `OPENAI_MODEL` (default `gpt-4o-mini`)
-- `OPENAI_MAX_OUTPUT_TOKENS` (default `700`)
-- `OPENAI_MAX_INPUT_CHARS` (default `12000`)
-- `OPENAI_REQUEST_TIMEOUT_MS` (default `20000`)
-- `OPENAI_CONNECT_TIMEOUT_MS` (default `2000`)
-- `OPENAI_OVERALL_DEADLINE_MS` (default `22000`)
-- `OPENAI_RETRY_ENABLED` (default `true`)
-- `OPENAI_RETRY_MAX_ATTEMPTS` (default `1`)
-
-## Run and test from root
+## Run and test
 
 ```bash
 mvn -B clean verify
@@ -61,5 +68,5 @@ mvn -B clean verify
 
 ## Notes
 
-- Package and coordinate namespace is standardized on `com.av.agents`.
 - Avoid committing secrets; provide credentials via environment variables or secret managers.
+- See `docs/REPO_EVAL.md` for baseline inventory and currently identified coupling/dependency cleanup follow-ups.

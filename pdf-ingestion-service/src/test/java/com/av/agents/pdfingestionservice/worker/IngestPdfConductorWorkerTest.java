@@ -31,7 +31,7 @@ class IngestPdfConductorWorkerTest {
         Task task = baseTask("task-1", Map.of("jobId", "job-1", "pdfUrl", "http://example.com/a.pdf"));
 
         when(pipelineService.process(any())).thenReturn(PdfIngestionResultDto.builder()
-                .artifactRef("pdf:abc")
+                .artifactRef("file:///tmp/abc.pdf")
                 .sha256("abc")
                 .bytes(123)
                 .durationMs(20)
@@ -41,7 +41,7 @@ class IngestPdfConductorWorkerTest {
 
         assertThat(result.getStatus()).isEqualTo(TaskResult.Status.COMPLETED);
         assertThat(result.getOutputData()).containsKey("artifactRef");
-        assertThat(result.getOutputData().get("artifactRef")).isEqualTo("pdf:abc");
+        assertThat(result.getOutputData().get("artifactRef")).isEqualTo("file:///tmp/abc.pdf");
     }
 
     @Test

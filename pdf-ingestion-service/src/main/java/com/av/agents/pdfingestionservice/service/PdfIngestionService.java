@@ -40,10 +40,10 @@ public class PdfIngestionService implements IPdfIngestionService {
     public IngestionPayload ingest(String jobId, String pdfUrl) {
         DownloadedPdf downloadedPdf = download(pdfUrl);
         String sha256 = sha256Hex(downloadedPdf.bytes());
-        String artifactRef = "pdf:" + sha256;
-
-        if (pdfArtifactRepository.findBySha256(sha256).isPresent()) {
-            return new IngestionPayload(sha256, downloadedPdf.bytes().length, artifactRef);
+        var existing = pdfArtifactRepository.findBySha256(sha256);
+        if (existing.isPresent()) {
+            String existingRef = Path.of(existing.get().getStoragePath()).toUri().toString();
+            return new IngestionPayload(sha256, downloadedPdf.bytes().length, existingRef);
         }
 
         String relativePath = jobId + "/" + sha256 + ".pdf";
@@ -59,6 +59,7 @@ public class PdfIngestionService implements IPdfIngestionService {
         entity.setCreatedAt(OffsetDateTime.now());
         pdfArtifactRepository.save(entity);
 
+        String artifactRef = destination.toUri().toString();
         return new IngestionPayload(sha256, downloadedPdf.bytes().length, artifactRef);
     }
 
