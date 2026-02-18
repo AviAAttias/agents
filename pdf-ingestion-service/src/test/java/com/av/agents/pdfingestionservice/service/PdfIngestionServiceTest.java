@@ -1,6 +1,8 @@
 package com.av.agents.pdfingestionservice.service;
 
 import com.av.agents.common.ai.PipelineTaskException;
+import com.av.agents.common.artifacts.ArtifactRef;
+import com.av.agents.common.artifacts.ArtifactResolver;
 import com.av.agents.pdfingestionservice.repository.IPdfArtifactRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +80,12 @@ class PdfIngestionServiceTest {
         var second = service.ingest("job-1", url);
 
         assertThat(first.sha256()).isEqualTo(second.sha256());
-        assertThat(first.artifactRef()).isEqualTo("pdf:" + first.sha256());
+        assertThat(first.artifactRef()).startsWith("file://");
+        assertThat(Path.of(java.net.URI.create(first.artifactRef())).getFileName().toString()).isEqualTo(first.sha256() + ".pdf");
+
+        ArtifactResolver resolver = ArtifactResolver.defaultResolver(1000, 1000);
+        byte[] resolvedBytes = resolver.readBytes(ArtifactRef.parse(first.artifactRef()), 4096);
+        assertThat(resolvedBytes).isEqualTo(pdfBytes);
     }
 
     private void registerBinary(String path, String contentType, byte[] bytes) {

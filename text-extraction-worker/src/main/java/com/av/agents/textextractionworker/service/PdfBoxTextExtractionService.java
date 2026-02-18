@@ -1,6 +1,9 @@
 package com.av.agents.textextractionworker.service;
 
 import com.av.agents.common.ai.PipelineTaskException;
+import com.av.agents.common.artifacts.ArtifactRef;
+import com.av.agents.common.artifacts.ArtifactResolutionException;
+import com.av.agents.common.artifacts.ArtifactResolver;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.Loader;
@@ -11,10 +14,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -26,6 +25,15 @@ public class PdfBoxTextExtractionService implements PdfTextExtractionService {
 
     @Value("${TEXT_EXTRACTION_MAX_TEXT_CHARS:12000}")
     private int maxTextChars;
+
+    @Value("${TEXT_EXTRACTION_MAX_INPUT_BYTES:26214400}")
+    private long maxInputBytes;
+
+    @Value("${TEXT_EXTRACTION_CONNECT_TIMEOUT_MS:5000}")
+    private int connectTimeoutMs;
+
+    @Value("${TEXT_EXTRACTION_READ_TIMEOUT_MS:10000}")
+    private int readTimeoutMs;
 
     @Override
     public ExtractionResult extract(String artifactRef) {
@@ -56,26 +64,13 @@ public class PdfBoxTextExtractionService implements PdfTextExtractionService {
         }
     }
 
-    private byte[] loadPdfBytes(String artifactRef) {
+    private byte[] loadPdfBytes(String artifactRefRaw) {
         try {
-            if (artifactRef.startsWith("file://")) {
-                return Files.readAllBytes(Path.of(URI.create(artifactRef)));
-            }
-            if (artifactRef.startsWith("http://") || artifactRef.startsWith("https://")) {
-                try (InputStream is = URI.create(artifactRef).toURL().openStream()) {
-                    return is.readAllBytes();
-                }
-            }
-            Path path = Path.of(artifactRef);
-            if (Files.exists(path)) {
-                return Files.readAllBytes(path);
-            }
-            throw new PipelineTaskException(
-                    "ARTIFACT_NOT_FOUND",
-                    "Artifact reference is unsupported or does not exist: " + artifactRef
-            );
-        } catch (IOException ex) {
-            throw new PipelineTaskException("ARTIFACT_READ_FAILED", "Could not read artifact bytes", ex);
+            ArtifactResolver resolver = ArtifactResolver.defaultResolver(connectTimeoutMs, readTimeoutMs);
+            ArtifactRef ref = ArtifactRef.parse(artifactRefRaw);
+            return resolver.readBytes(ref, maxInputBytes);
+        } catch (ArtifactResolutionException ex) {
+            throw new PipelineTaskException("ARTIFACT_READ_FAILED", ex.getMessage(), ex);
         }
     }
 

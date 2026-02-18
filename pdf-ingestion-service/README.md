@@ -2,22 +2,22 @@
 
 ## Responsibility
 
-Ingests PDF metadata + artifact location and persists pipeline step state.
+Downloads source PDF, validates size/type, persists artifact metadata, and emits a resolvable PDF artifact reference.
 
 ## Owned workflow/task contract
 
-- Conductor task(s): ingest_pdf
-- Input JSON: `{ "jobId": "...", "artifact": "..." }`
-Output JSON: `{ "jobId": "...", "artifactRef": "...", "status": "INGESTED" }`
+- Conductor task: `ingest_pdf`
+- Input JSON: `{ "jobId": "...", "pdfUrl": "https://.../file.pdf" }`
+- Output JSON includes:
+  - `artifactRef`: `file://.../<jobId>/<sha256>.pdf`
+  - `sha256`: SHA-256 digest of downloaded PDF bytes
+  - `bytes`, `durationMs`
 
-## Env vars and config keys
+## IO hardening
 
-- `SPRING_PROFILES_ACTIVE`
-- `SPRING_CONFIG_IMPORT(optional when using config-server)`
-- `CONDUCTOR_SERVER_URL`
-- `SPRING_DATASOURCE_URL`
-- `SPRING_DATASOURCE_USERNAME`
-- `SPRING_DATASOURCE_PASSWORD`
+- Download connect/request timeout via `pdf.ingestion.timeout-ms`
+- Max accepted bytes via `pdf.ingestion.max-bytes`
+- Artifact write directory via `pdf.ingestion.artifacts-dir`
 
 ## Local run
 
@@ -30,5 +30,3 @@ mvn -pl pdf-ingestion-service spring-boot:run
 ```bash
 mvn -pl pdf-ingestion-service test
 ```
-
-- Validates module unit/integration behavior and task contract serialization where applicable.

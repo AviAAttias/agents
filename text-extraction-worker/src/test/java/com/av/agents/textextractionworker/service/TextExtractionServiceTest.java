@@ -69,6 +69,15 @@ class TextExtractionServiceTest {
         assertThat(result.wasTruncated()).isTrue();
     }
 
+
+    @Test
+    void extract_rejectsLegacyPdfSchemeReference() {
+        assertThatThrownBy(() -> service.extract("pdf:deadbeef"))
+                .isInstanceOf(PipelineTaskException.class)
+                .extracting("errorCode")
+                .isEqualTo("ARTIFACT_READ_FAILED");
+    }
+
     @Test
     void extract_throwsErrorForMalformedPdf(@TempDir Path tempDir) throws Exception {
         Path malformed = tempDir.resolve("malformed.pdf");

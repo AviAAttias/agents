@@ -2,22 +2,27 @@
 
 ## Responsibility
 
-Extracts text from ingested PDF and stores text artifact rows.
+Resolves PDF `artifactRef`, reads bounded bytes with timeout-safe IO, and extracts text using PDFBox.
 
 ## Owned workflow/task contract
 
-- Conductor task(s): extract_text
-- Input JSON: `{ "jobId": "...", "artifact": "..." }`
-Output JSON: `{ "text": "...", "artifactRef": "text-artifact://<id>", "pageCount": <number> }`
+- Conductor task: `extract_text`
+- Input JSON: `{ "jobId": "...", "artifact": "file://...pdf" }`
+- Output JSON includes:
+  - `text`
+  - `artifactRef` / `textArtifact` (text artifact id ref)
+  - `inputBytes`, `outputChars`, `pageCount`, `sha256`, `durationMs`, `wasTruncated`
 
-## Env vars and config keys
+## Artifact resolution
 
-- `SPRING_PROFILES_ACTIVE`
-- `SPRING_CONFIG_IMPORT(optional when using config-server)`
-- `CONDUCTOR_SERVER_URL`
-- `SPRING_DATASOURCE_URL`
-- `SPRING_DATASOURCE_USERNAME`
-- `SPRING_DATASOURCE_PASSWORD`
+Artifact parsing/resolution is delegated to `common-lib` (`ArtifactRef` + `ArtifactResolver`) instead of worker-local string parsing.
+
+## IO hardening config
+
+- `TEXT_EXTRACTION_MAX_INPUT_BYTES` (default `26214400`)
+- `TEXT_EXTRACTION_CONNECT_TIMEOUT_MS` (default `5000`)
+- `TEXT_EXTRACTION_READ_TIMEOUT_MS` (default `10000`)
+- `TEXT_EXTRACTION_MAX_TEXT_CHARS` (default `12000`)
 
 ## Local run
 
@@ -30,5 +35,3 @@ mvn -pl text-extraction-worker spring-boot:run
 ```bash
 mvn -pl text-extraction-worker test
 ```
-
-- Validates module unit/integration behavior and task contract serialization where applicable.
