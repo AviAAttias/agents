@@ -6,20 +6,16 @@ import com.av.agents.sharedpersistence.entity.ApprovalRequestEntity;
 import com.av.agents.sharedpersistence.entity.ApprovalStatus;
 import com.av.agents.sharedpersistence.repository.IApprovalRequestRepository;
 import java.time.Instant;
-import java.util.Arrays;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.BeansException;
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
-import org.springframework.beans.factory.support.BeanDefinitionRegistry;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.context.ContextConfiguration;
 
 @SpringBootTest(properties = {
-    "spring.flyway.enabled=true",
+    "spring.flyway.enabled=false",
     "spring.flyway.locations=classpath:db/migration",
     "spring.flyway.validate-on-migrate=true",
     "spring.flyway.fail-on-missing-locations=true",
@@ -29,7 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
     "spring.jpa.hibernate.ddl-auto=validate",
     "logging.level.org.flywaydb=DEBUG"
 })
-@Import(SharedSchemaValidationIntegrationTest.JpaDependsOnFlywayConfig.class)
+@ContextConfiguration(initializers = SharedSchemaValidationIntegrationTest.FlywayContextInitializer.class)
 class SharedSchemaValidationIntegrationTest {
 
   @Autowired
@@ -47,28 +43,20 @@ class SharedSchemaValidationIntegrationTest {
     assertThat(repository.findByJobId("job-it-1")).isPresent();
   }
 
-  @TestConfiguration
-  static class JpaDependsOnFlywayConfig {
-    @Bean
-    BeanFactoryPostProcessor entityManagerFactoryDependsOnFlyway() {
-      return new BeanFactoryPostProcessor() {
-        @Override
-        public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-          if (beanFactory instanceof BeanDefinitionRegistry registry && registry.containsBeanDefinition("entityManagerFactory")) {
-            var beanDefinition = registry.getBeanDefinition("entityManagerFactory");
-            String[] dependsOn = beanDefinition.getDependsOn();
-            if (dependsOn == null) {
-              beanDefinition.setDependsOn("flyway");
-              return;
-            }
-            if (Arrays.stream(dependsOn).noneMatch("flyway"::equals)) {
-              String[] merged = Arrays.copyOf(dependsOn, dependsOn.length + 1);
-              merged[dependsOn.length] = "flyway";
-              beanDefinition.setDependsOn(merged);
-            }
-          }
-        }
-      };
+  static class FlywayContextInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+    @Override
+    public void initialize(ConfigurableApplicationContext applicationContext) {
+      String url = applicationContext.getEnvironment().getProperty("spring.datasource.url");
+      String username = applicationContext.getEnvironment().getProperty("spring.datasource.username", "sa");
+      String password = applicationContext.getEnvironment().getProperty("spring.datasource.password", "");
+
+      Flyway.configure()
+          .locations("classpath:db/migration")
+          .validateOnMigrate(true)
+          .failOnMissingLocations(true)
+          .dataSource(url, username, password)
+          .load()
+          .migrate();
     }
   }
 }
