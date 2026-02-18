@@ -16,8 +16,10 @@ spring:
   config:
     import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
   mail:
-    host: ${MAIL_HOST:mailhog}
-    port: ${MAIL_PORT:1025}
+    host: ${SMTP_HOST:mailhog}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASS:}
 management:
   endpoints:
     web:

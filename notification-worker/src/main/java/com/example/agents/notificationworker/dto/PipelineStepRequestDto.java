@@ -10,5 +10,8 @@ public class PipelineStepRequestDto {
     @NotBlank
     private String taskType;
     @NotBlank
+    private String recipient;
+    @NotBlank
+    private String reportArtifact;
     private String payloadJson;
 }
