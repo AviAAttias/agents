@@ -12,7 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(properties = {
     "spring.flyway.enabled=true",
-    "spring.flyway.locations=classpath:db/migration",
+    "spring.flyway.locations=classpath:db/migration,classpath:db/migration/shared",
     "spring.flyway.validate-on-migrate=true",
     "spring.flyway.fail-on-missing-locations=true",
     "spring.flyway.default-schema=public",
