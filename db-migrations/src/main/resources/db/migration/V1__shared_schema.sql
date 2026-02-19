@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS pipeline_step (
+CREATE TABLE IF NOT EXISTS shared.pipeline_step (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
@@ -8,11 +8,11 @@ CREATE TABLE IF NOT EXISTS pipeline_step (
     idempotency_key VARCHAR(200) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uk_pipeline_step_job_task ON pipeline_step(job_id, task_type);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_pipeline_step_idempotency ON pipeline_step(idempotency_key);
-ALTER TABLE pipeline_step ADD COLUMN IF NOT EXISTS output_json TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uk_pipeline_step_job_task ON shared.pipeline_step(job_id, task_type);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_pipeline_step_idempotency ON shared.pipeline_step(idempotency_key);
+ALTER TABLE shared.pipeline_step ADD COLUMN IF NOT EXISTS output_json TEXT;
 
-CREATE TABLE IF NOT EXISTS classification_pipeline_step (
+CREATE TABLE IF NOT EXISTS shared.classification_pipeline_step (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
@@ -22,10 +22,10 @@ CREATE TABLE IF NOT EXISTS classification_pipeline_step (
     idempotency_key VARCHAR(200) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uk_classification_pipeline_step_job_task ON classification_pipeline_step(job_id, task_type);
-CREATE UNIQUE INDEX IF NOT EXISTS uk_classification_pipeline_step_idempotency ON classification_pipeline_step(idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_classification_pipeline_step_job_task ON shared.classification_pipeline_step(job_id, task_type);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_classification_pipeline_step_idempotency ON shared.classification_pipeline_step(idempotency_key);
 
-CREATE TABLE IF NOT EXISTS text_artifact (
+CREATE TABLE IF NOT EXISTS shared.text_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     text_body TEXT NOT NULL,
@@ -37,9 +37,9 @@ CREATE TABLE IF NOT EXISTS text_artifact (
     extraction_method VARCHAR(64) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_text_artifact_job_id ON text_artifact(job_id);
+CREATE INDEX IF NOT EXISTS idx_text_artifact_job_id ON shared.text_artifact(job_id);
 
-CREATE TABLE IF NOT EXISTS pdf_artifact (
+CREATE TABLE IF NOT EXISTS shared.pdf_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     sha256 VARCHAR(64) NOT NULL,
@@ -48,10 +48,10 @@ CREATE TABLE IF NOT EXISTS pdf_artifact (
     storage_path VARCHAR(1024) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uk_pdf_artifact_sha256 ON pdf_artifact(sha256);
-CREATE INDEX IF NOT EXISTS idx_pdf_artifact_job_id ON pdf_artifact(job_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_pdf_artifact_sha256 ON shared.pdf_artifact(sha256);
+CREATE INDEX IF NOT EXISTS idx_pdf_artifact_job_id ON shared.pdf_artifact(job_id);
 
-CREATE TABLE IF NOT EXISTS classification_artifact (
+CREATE TABLE IF NOT EXISTS shared.classification_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
@@ -59,9 +59,9 @@ CREATE TABLE IF NOT EXISTS classification_artifact (
     mapped_result_json TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS idx_classification_artifact_job_task ON classification_artifact(job_id, task_type);
+CREATE INDEX IF NOT EXISTS idx_classification_artifact_job_task ON shared.classification_artifact(job_id, task_type);
 
-CREATE TABLE IF NOT EXISTS financial_artifact (
+CREATE TABLE IF NOT EXISTS shared.financial_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS financial_artifact (
     CONSTRAINT uk_financial_artifact_job_task UNIQUE (job_id, task_type)
 );
 
-CREATE TABLE IF NOT EXISTS validation_artifact (
+CREATE TABLE IF NOT EXISTS shared.validation_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
@@ -89,9 +89,9 @@ CREATE TABLE IF NOT EXISTS validation_artifact (
     violation_count INT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uk_validation_artifact_job_task ON validation_artifact(job_id, task_type);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_validation_artifact_job_task ON shared.validation_artifact(job_id, task_type);
 
-CREATE TABLE IF NOT EXISTS report_artifact (
+CREATE TABLE IF NOT EXISTS shared.report_artifact (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     task_type VARCHAR(120) NOT NULL,
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS report_artifact (
     CONSTRAINT uk_report_artifact_job_task UNIQUE (job_id, task_type)
 );
 
-CREATE TABLE IF NOT EXISTS email_delivery (
+CREATE TABLE IF NOT EXISTS shared.email_delivery (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(120) NOT NULL,
     recipient VARCHAR(255) NOT NULL,
@@ -112,4 +112,4 @@ CREATE TABLE IF NOT EXISTS email_delivery (
     provider_message_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uk_email_delivery_job_recipient_artifact ON email_delivery(job_id, recipient, report_artifact_ref);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_email_delivery_job_recipient_artifact ON shared.email_delivery(job_id, recipient, report_artifact_ref);
