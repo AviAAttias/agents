@@ -17,4 +17,10 @@ class FlywayClasspathTest {
         .as("approval migration on classpath")
         .isNotNull();
   }
+
+  @Test
+  void flywayDependencyIsOnClasspath() throws ClassNotFoundException {
+    assertThat(Class.forName("org.flywaydb.core.Flyway")).isNotNull();
+  }
+
 }
