@@ -1,4 +1,6 @@
-CREATE TABLE IF NOT EXISTS approval_request (
+CREATE SCHEMA IF NOT EXISTS shared;
+
+CREATE TABLE IF NOT EXISTS shared.approval_request (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL,
