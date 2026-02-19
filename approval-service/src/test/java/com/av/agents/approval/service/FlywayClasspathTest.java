@@ -16,11 +16,16 @@ class FlywayClasspathTest {
     assertThat(classLoader.getResource("db/migration/V2__create_approval_request.sql"))
         .as("approval migration on classpath")
         .isNotNull();
+    assertThat(classLoader.getResource("db/migration/shared/V3__shared_noop.sql"))
+        .as("shared migration location on classpath")
+        .isNotNull();
   }
 
   @Test
   void flywayDependencyIsOnClasspath() throws ClassNotFoundException {
     assertThat(Class.forName("org.flywaydb.core.Flyway")).isNotNull();
+    assertThat(Class.forName("org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"))
+        .isNotNull();
   }
 
 }
