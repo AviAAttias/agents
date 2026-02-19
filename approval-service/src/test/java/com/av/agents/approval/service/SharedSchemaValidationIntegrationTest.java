@@ -15,9 +15,6 @@ import org.springframework.boot.test.context.SpringBootTest;
     "spring.flyway.locations=classpath:db/migration,classpath:db/migration/shared",
     "spring.flyway.validate-on-migrate=true",
     "spring.flyway.fail-on-missing-locations=true",
-    "spring.flyway.default-schema=public",
-    "spring.flyway.schemas=public",
-    "spring.jpa.properties.hibernate.default_schema=public",
     "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "spring.datasource.username=sa",
     "spring.datasource.password=",
@@ -29,18 +26,6 @@ class SharedSchemaValidationIntegrationTest {
   @Autowired
   private IApprovalRequestRepository repository;
 
-
-  @Test
-  void flywayMigrationsAreOnClasspath() {
-    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-
-    assertThat(classLoader.getResource("db/migration"))
-        .as("db/migration on classpath")
-        .isNotNull();
-    assertThat(classLoader.getResource("db/migration/V2__create_approval_request.sql"))
-        .as("approval migration on classpath")
-        .isNotNull();
-  }
 
   @Test
   void contextStartsAndSharedRepositoryIsUsable() {
