@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
     "spring.flyway.fail-on-missing-locations=true",
     "spring.flyway.default-schema=shared",
     "spring.flyway.schemas=shared",
+    "spring.flyway.create-schemas=true",
     "spring.jpa.properties.hibernate.default_schema=shared",
     "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
     "spring.datasource.username=sa",
