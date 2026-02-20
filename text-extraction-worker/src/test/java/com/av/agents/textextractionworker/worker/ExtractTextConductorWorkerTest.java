@@ -2,7 +2,7 @@ package com.av.agents.textextractionworker.worker;
 
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.textextractionworker.dto.TextExtractionResultDto;
-import com.av.agents.textextractionworker.service.TextExtractionPipelineService;
+import com.av.agents.textextractionworker.service.ITextExtractionPipelineService;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 class ExtractTextConductorWorkerTest {
 
     @Mock
-    private TextExtractionPipelineService textExtractionPipelineService;
+    private ITextExtractionPipelineService textExtractionPipelineService;
 
     @InjectMocks
     private ExtractTextConductorWorker worker;

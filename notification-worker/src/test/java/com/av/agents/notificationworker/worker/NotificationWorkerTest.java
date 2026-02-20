@@ -2,8 +2,8 @@ package com.av.agents.notificationworker.worker;
 
 import com.av.agents.common.enums.PipelineStatus;
 import com.av.agents.notificationworker.dto.PipelineStepRequestDto;
-import com.av.agents.notificationworker.entity.EmailDeliveryEntity;
-import com.av.agents.notificationworker.repository.EmailDeliveryRepository;
+import com.av.agents.sharedpersistence.entity.EmailDeliveryEntity;
+import com.av.agents.sharedpersistence.repository.IEmailDeliveryRepository;
 import com.av.agents.notificationworker.service.INotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.*;
 class NotificationWorkerTest {
 
     @Mock
-    private EmailDeliveryRepository emailDeliveryRepository;
+    private IEmailDeliveryRepository emailDeliveryRepository;
     @Mock
     private INotificationService notificationService;
 

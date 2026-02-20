@@ -6,7 +6,7 @@ import java.util.Set;
 
 public record ArtifactRef(String scheme, String id, String raw) {
     private static final Set<String> ALLOWED_SCHEMES = Set.of(
-            "file", "http", "https", "text-artifact", "fin", "val", "report", "artifact"
+            "file", "http", "https", "text-artifact", "fin", "val", "report", "appr", "artifact"
     );
 
     public static ArtifactRef parse(String raw) {

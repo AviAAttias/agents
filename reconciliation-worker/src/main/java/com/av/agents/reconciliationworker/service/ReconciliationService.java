@@ -2,9 +2,9 @@ package com.av.agents.reconciliationworker.service;
 
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.reconciliationworker.dto.ReconciliationResultDto;
-import com.av.agents.reconciliationworker.entity.ValidationArtifactEntity;
-import com.av.agents.reconciliationworker.repository.FinancialArtifactRepository;
-import com.av.agents.reconciliationworker.repository.ValidationArtifactRepository;
+import com.av.agents.sharedpersistence.entity.ValidationArtifactEntity;
+import com.av.agents.reconciliationworker.repository.IFinancialArtifactRepository;
+import com.av.agents.sharedpersistence.repository.IValidationArtifactRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -25,8 +25,8 @@ import java.util.*;
 public class ReconciliationService implements IReconciliationService {
     private static final String TASK_TYPE = "validate_reconcile";
 
-    private final FinancialArtifactRepository financialArtifactRepository;
-    private final ValidationArtifactRepository validationArtifactRepository;
+    private final IFinancialArtifactRepository financialArtifactRepository;
+    private final IValidationArtifactRepository validationArtifactRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${reconciliation.tolerance.abs:0.01}")

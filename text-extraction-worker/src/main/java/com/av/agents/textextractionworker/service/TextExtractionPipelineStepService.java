@@ -4,9 +4,9 @@ import com.av.agents.common.enums.PipelineStatus;
 import com.av.agents.textextractionworker.dto.TextExtractionRequestDto;
 import com.av.agents.textextractionworker.dto.TextExtractionResultDto;
 import com.av.agents.textextractionworker.entity.PipelineStepEntity;
-import com.av.agents.textextractionworker.entity.TextArtifactEntity;
+import com.av.agents.sharedpersistence.entity.TextArtifactEntity;
 import com.av.agents.textextractionworker.repository.IPipelineStepRepository;
-import com.av.agents.textextractionworker.repository.ITextArtifactRepository;
+import com.av.agents.sharedpersistence.repository.ITextArtifactRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -19,12 +19,12 @@ import java.time.OffsetDateTime;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class TextExtractionPipelineStepService implements TextExtractionPipelineService {
+public class TextExtractionPipelineStepService implements ITextExtractionPipelineService {
     private static final String TASK_TYPE = "extract_text";
 
     private final IPipelineStepRepository pipelineStepRepository;
     private final ITextArtifactRepository textArtifactRepository;
-    private final PdfTextExtractionService textExtractionService;
+    private final IPdfTextExtractionService textExtractionService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -37,7 +37,7 @@ public class TextExtractionPipelineStepService implements TextExtractionPipeline
         }
 
         long startMs = System.currentTimeMillis();
-        PdfTextExtractionService.ExtractionResult extractionResult = textExtractionService.extract(requestDto.getArtifactRef());
+        IPdfTextExtractionService.ExtractionResult extractionResult = textExtractionService.extract(requestDto.getArtifactRef());
 
         TextArtifactEntity artifact = new TextArtifactEntity();
         artifact.setJobId(requestDto.getJobId());

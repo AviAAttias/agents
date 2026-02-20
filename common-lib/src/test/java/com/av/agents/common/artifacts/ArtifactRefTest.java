@@ -21,6 +21,14 @@ class ArtifactRefTest {
         assertThat(ref.id()).isEqualTo("//42");
     }
 
+
+    @Test
+    void parse_approvalScheme() {
+        ArtifactRef ref = ArtifactRef.parse("appr:123");
+        assertThat(ref.scheme()).isEqualTo("appr");
+        assertThat(ref.id()).isEqualTo("123");
+    }
+
     @Test
     void parse_unsupportedSchemeFails() {
         assertThatThrownBy(() -> ArtifactRef.parse("pdf:abcd"))

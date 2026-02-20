@@ -1,9 +1,9 @@
 package com.av.agents.textextractionworker.worker;
 
 import com.av.agents.textextractionworker.entity.PipelineStepEntity;
-import com.av.agents.textextractionworker.entity.TextArtifactEntity;
+import com.av.agents.sharedpersistence.entity.TextArtifactEntity;
 import com.av.agents.textextractionworker.repository.IPipelineStepRepository;
-import com.av.agents.textextractionworker.repository.ITextArtifactRepository;
+import com.av.agents.sharedpersistence.repository.ITextArtifactRepository;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
 import org.junit.jupiter.api.Test;
@@ -15,6 +15,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,8 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 class ExtractTextConductorWorkerIntegrationTest {
 
+    private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:15.10");
+
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
 
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry registry) {

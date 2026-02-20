@@ -2,7 +2,7 @@ package com.av.agents.pdfingestionservice.worker;
 
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.pdfingestionservice.dto.PdfIngestionResultDto;
-import com.av.agents.pdfingestionservice.service.PdfIngestionPipelineService;
+import com.av.agents.pdfingestionservice.service.IPdfIngestionPipelineService;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 class IngestPdfConductorWorkerTest {
 
     @Mock
-    private PdfIngestionPipelineService pipelineService;
+    private IPdfIngestionPipelineService pipelineService;
 
     @InjectMocks
     private IngestPdfConductorWorker worker;
