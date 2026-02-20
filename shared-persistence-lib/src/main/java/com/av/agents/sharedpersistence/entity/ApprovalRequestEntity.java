@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "approval_request")
+@Table(name = "approval_request", schema = "shared")
 @Getter
 @Setter
 public class ApprovalRequestEntity {
