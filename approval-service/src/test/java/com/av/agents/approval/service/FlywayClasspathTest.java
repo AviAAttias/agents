@@ -15,11 +15,11 @@ class FlywayClasspathTest {
     assertThat(classLoader.getResource("db/migration"))
         .as("db/migration on classpath")
         .isNotNull();
-    assertThat(classLoader.getResource("db/migration/shared/V2__create_approval_request.sql"))
+    assertThat(classLoader.getResource("db/migration/V1__create_approval_request.sql"))
         .as("approval migration on classpath")
         .isNotNull();
-    assertThat(classLoader.getResource("db/migration/shared/V3__shared_noop.sql"))
-        .as("shared migration location on classpath")
+    assertThat(classLoader.getResource("db/migration/shared/V0__create_shared_schema.sql"))
+        .as("shared bootstrap migration on classpath")
         .isNotNull();
   }
 
