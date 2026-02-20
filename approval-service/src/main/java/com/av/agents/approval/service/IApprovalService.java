@@ -1,6 +1,6 @@
 package com.av.agents.approval.service;
 
-import com.av.agents.approval.domain.ApprovalRequestEntity;
+import com.av.agents.sharedpersistence.entity.ApprovalRequestEntity;
 
 public interface IApprovalService {
 

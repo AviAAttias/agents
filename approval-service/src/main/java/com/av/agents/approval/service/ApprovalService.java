@@ -1,9 +1,9 @@
 package com.av.agents.approval.service;
 
-import com.av.agents.approval.domain.ApprovalRequestEntity;
-import com.av.agents.approval.domain.ApprovalStatus;
-import com.av.agents.approval.infra.ConductorEventPublisher;
-import com.av.agents.approval.repository.ApprovalRequestRepository;
+import com.av.agents.sharedpersistence.entity.ApprovalRequestEntity;
+import com.av.agents.sharedpersistence.entity.ApprovalStatus;
+import com.av.agents.approval.infra.IConductorEventPublisher;
+import com.av.agents.sharedpersistence.repository.IApprovalRequestRepository;
 import jakarta.transaction.Transactional;
 import java.time.Clock;
 import java.time.Instant;
@@ -17,8 +17,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ApprovalService implements IApprovalService {
 
-  private final ApprovalRequestRepository repository;
-  private final ConductorEventPublisher eventPublisher;
+  private final IApprovalRequestRepository repository;
+  private final IConductorEventPublisher eventPublisher;
   private final Clock clock;
 
   @Override

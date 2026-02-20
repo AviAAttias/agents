@@ -1,8 +1,8 @@
 package com.av.agents.reportingworker.service;
 
 import com.av.agents.reportingworker.dto.PipelineStepRequestDto;
-import com.av.agents.reportingworker.entity.ReportArtifactEntity;
-import com.av.agents.reportingworker.repository.ReportArtifactRepository;
+import com.av.agents.sharedpersistence.entity.ReportArtifactEntity;
+import com.av.agents.sharedpersistence.repository.IReportArtifactRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,7 +20,7 @@ import static org.mockito.Mockito.*;
 class ReportGenerationWorkerTest {
 
     @Mock
-    private ReportArtifactRepository reportArtifactRepository;
+    private IReportArtifactRepository reportArtifactRepository;
     @Mock
     private IReportGenerationService reportGenerationService;
     @InjectMocks

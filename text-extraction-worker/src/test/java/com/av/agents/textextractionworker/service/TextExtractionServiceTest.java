@@ -39,7 +39,7 @@ class TextExtractionServiceTest {
         Path pdf = tempDir.resolve("invoice.pdf");
         Files.copy(getClass().getResourceAsStream("/pdfs/invoice-sample.pdf"), pdf);
 
-        PdfTextExtractionService.ExtractionResult result = service.extract(pdf.toString());
+        IPdfTextExtractionService.ExtractionResult result = service.extract(pdf.toString());
 
         assertThat(result.extractedText()).containsIgnoringCase("invoice");
         assertThat(result.pageCount()).isGreaterThan(0);
@@ -52,7 +52,7 @@ class TextExtractionServiceTest {
     void extract_forImageOnlyPdf_returnsEmptyText(@TempDir Path tempDir) throws Exception {
         Path imageOnlyPdf = createImageOnlyPdf(tempDir.resolve("scan-only.pdf"));
 
-        PdfTextExtractionService.ExtractionResult result = service.extract(imageOnlyPdf.toString());
+        IPdfTextExtractionService.ExtractionResult result = service.extract(imageOnlyPdf.toString());
 
         assertThat(result.pageCount()).isEqualTo(1);
         assertThat(result.extractedText().trim()).isEmpty();
@@ -65,7 +65,7 @@ class TextExtractionServiceTest {
         Path pdf = tempDir.resolve("invoice.pdf");
         Files.copy(getClass().getResourceAsStream("/pdfs/invoice-sample.pdf"), pdf);
 
-        PdfTextExtractionService.ExtractionResult result = service.extract(pdf.toString());
+        IPdfTextExtractionService.ExtractionResult result = service.extract(pdf.toString());
 
         assertThat(result.extractedText().length()).isEqualTo(20);
         assertThat(result.outputChars()).isEqualTo(20);

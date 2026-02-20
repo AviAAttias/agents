@@ -1,4 +1,4 @@
-CREATE TABLE approval_request (
+CREATE TABLE IF NOT EXISTS shared.approval_request (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(255) NOT NULL,
     status VARCHAR(32) NOT NULL,

@@ -7,8 +7,8 @@ import com.av.agents.common.ai.OpenAiJsonRequest;
 import com.av.agents.common.ai.OpenAiJsonResponse;
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.financialextractionworker.dto.FinancialExtractionRequestDto;
-import com.av.agents.financialextractionworker.entity.FinancialArtifactEntity;
-import com.av.agents.financialextractionworker.repository.FinancialArtifactRepository;
+import com.av.agents.sharedpersistence.entity.FinancialArtifactEntity;
+import com.av.agents.sharedpersistence.repository.IFinancialArtifactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ class FinancialExtractionServiceTest {
     @Mock
     private OpenAiJsonClient openAiJsonClient;
     @Mock
-    private FinancialArtifactRepository repository;
+    private IFinancialArtifactRepository repository;
     @InjectMocks
     private FinancialExtractionService service;
 
