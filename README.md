@@ -12,6 +12,7 @@ The pipeline passes artifacts only through explicit `artifactRef` values.
 - `fin:<id>` → financial extraction artifact identifier (DB-backed module contract)
 - `val:<id>` → reconciliation/validation artifact identifier (DB-backed module contract)
 - `report:<id>` → report artifact identifier (DB-backed module contract)
+- `appr:<id>` → approval artifact identifier (DB-backed module contract)
 
 Shared parsing/resolution primitives are in `common-lib`:
 
@@ -70,3 +71,20 @@ mvn -B clean verify
 
 - Avoid committing secrets; provide credentials via environment variables or secret managers.
 - See `docs/REPO_EVAL.md` for baseline inventory and currently identified coupling/dependency cleanup follow-ups.
+
+
+## Shared database and migrations
+
+All services/workers use a **single shared schema**. Schema migrations are owned only by `db-migrations` (`db-migrations/src/main/resources/db/migration`). Service modules have Flyway disabled by default (`spring.flyway.enabled=false`) and run with `spring.jpa.hibernate.ddl-auto=validate` to fail fast on mismatches.
+
+Run migrations first:
+
+```bash
+mvn -pl db-migrations spring-boot:run
+```
+
+Then start a service/worker, for example:
+
+```bash
+mvn -pl approval-service spring-boot:run
+```

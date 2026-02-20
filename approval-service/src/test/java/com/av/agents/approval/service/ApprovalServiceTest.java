@@ -7,10 +7,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.av.agents.approval.domain.ApprovalRequestEntity;
-import com.av.agents.approval.domain.ApprovalStatus;
-import com.av.agents.approval.infra.ConductorEventPublisher;
-import com.av.agents.approval.repository.ApprovalRequestRepository;
+import com.av.agents.sharedpersistence.entity.ApprovalRequestEntity;
+import com.av.agents.sharedpersistence.entity.ApprovalStatus;
+import com.av.agents.approval.infra.IConductorEventPublisher;
+import com.av.agents.sharedpersistence.repository.IApprovalRequestRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -27,8 +27,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ApprovalServiceTest {
 
-  @Mock private ApprovalRequestRepository repository;
-  @Mock private ConductorEventPublisher eventPublisher;
+  @Mock private IApprovalRequestRepository repository;
+  @Mock private IConductorEventPublisher eventPublisher;
   @Captor private ArgumentCaptor<Map<String, Object>> payloadCaptor;
 
   private ApprovalService approvalService;

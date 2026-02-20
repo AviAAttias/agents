@@ -3,7 +3,7 @@ package com.av.agents.pdfingestionservice.worker;
 import com.av.agents.common.ai.PipelineTaskException;
 import com.av.agents.pdfingestionservice.dto.PdfIngestionRequestDto;
 import com.av.agents.pdfingestionservice.dto.PdfIngestionResultDto;
-import com.av.agents.pdfingestionservice.service.PdfIngestionPipelineService;
+import com.av.agents.pdfingestionservice.service.IPdfIngestionPipelineService;
 import com.netflix.conductor.client.worker.Worker;
 import com.netflix.conductor.common.metadata.tasks.Task;
 import com.netflix.conductor.common.metadata.tasks.TaskResult;
@@ -20,7 +20,7 @@ import java.util.Map;
 public class IngestPdfConductorWorker implements Worker {
     private static final String TASK_NAME = "ingest_pdf";
 
-    private final PdfIngestionPipelineService pdfIngestionPipelineService;
+    private final IPdfIngestionPipelineService pdfIngestionPipelineService;
 
     @Override
     public String getTaskDefName() {

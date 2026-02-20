@@ -2,9 +2,9 @@ package com.av.agents.textextractionworker.service;
 
 import com.av.agents.textextractionworker.dto.TextExtractionRequestDto;
 import com.av.agents.textextractionworker.entity.PipelineStepEntity;
-import com.av.agents.textextractionworker.entity.TextArtifactEntity;
+import com.av.agents.sharedpersistence.entity.TextArtifactEntity;
 import com.av.agents.textextractionworker.repository.IPipelineStepRepository;
-import com.av.agents.textextractionworker.repository.ITextArtifactRepository;
+import com.av.agents.sharedpersistence.repository.ITextArtifactRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ class PipelineStepServiceTest {
     @Mock
     private ITextArtifactRepository textArtifactRepository;
     @Mock
-    private PdfTextExtractionService textExtractionService;
+    private IPdfTextExtractionService textExtractionService;
 
     private TextExtractionPipelineStepService service;
 
@@ -59,7 +59,7 @@ class PipelineStepServiceTest {
         request.setJobId("job-2");
         request.setArtifactRef("/tmp/file.pdf");
         when(pipelineStepRepository.findByIdempotencyKey("job-2:extract_text")).thenReturn(Optional.empty());
-        when(textExtractionService.extract("/tmp/file.pdf")).thenReturn(new PdfTextExtractionService.ExtractionResult("text", 1, "pdfbox", 4, 10, "b".repeat(64), false));
+        when(textExtractionService.extract("/tmp/file.pdf")).thenReturn(new IPdfTextExtractionService.ExtractionResult("text", 1, "pdfbox", 4, 10, "b".repeat(64), false));
         when(textArtifactRepository.save(any(TextArtifactEntity.class))).thenAnswer(i -> {
             TextArtifactEntity entity = i.getArgument(0);
             entity.setId(22L);

@@ -1,6 +1,6 @@
 package com.av.agents.approval.service;
 
-import com.av.agents.approval.domain.ApprovalStatus;
+import com.av.agents.sharedpersistence.entity.ApprovalStatus;
 
 public enum ApprovalDecision {
   APPROVED,

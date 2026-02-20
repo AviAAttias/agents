@@ -1,0 +1,1 @@
+-- Shared migration location marker (intentionally no-op).

@@ -2,11 +2,11 @@ package com.av.agents.classificationworker.service;
 
 import com.av.agents.classificationworker.dto.PipelineStepRequestDto;
 import com.av.agents.classificationworker.entity.PipelineStepEntity;
-import com.av.agents.classificationworker.entity.TextArtifactEntity;
+import com.av.agents.sharedpersistence.entity.TextArtifactEntity;
 import com.av.agents.classificationworker.mapper.IPipelineStepMapper;
 import com.av.agents.classificationworker.repository.IClassificationArtifactRepository;
 import com.av.agents.classificationworker.repository.IPipelineStepRepository;
-import com.av.agents.classificationworker.repository.ITextArtifactRepository;
+import com.av.agents.sharedpersistence.repository.ITextArtifactRepository;
 import com.av.agents.common.ai.OpenAiJsonClient;
 import com.av.agents.common.ai.OpenAiJsonRequest;
 import com.av.agents.common.ai.OpenAiJsonResponse;
