@@ -10,6 +10,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 @SpringBootTest(properties = {
     "spring.flyway.enabled=true",
@@ -20,15 +26,26 @@ import org.springframework.boot.test.context.SpringBootTest;
     "spring.flyway.schemas=shared",
     "spring.flyway.create-schemas=true",
     "spring.jpa.properties.hibernate.default_schema=shared",
-    "spring.datasource.url=jdbc:h2:mem:sharedschema;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false",
-    "spring.datasource.username=sa",
-    "spring.datasource.password=",
     "spring.jpa.hibernate.ddl-auto=validate",
     "spring.jpa.defer-datasource-initialization=false",
     "logging.level.org.flywaydb=DEBUG",
     "logging.level.org.springframework.boot.autoconfigure.flyway=DEBUG"
 })
+@Testcontainers(disabledWithoutDocker = true)
 class SharedSchemaValidationIntegrationTest {
+
+  private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:16.3");
+
+  @Container
+  static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
+
+  @DynamicPropertySource
+  static void configure(DynamicPropertyRegistry registry) {
+    registry.add("spring.datasource.url", postgres::getJdbcUrl);
+    registry.add("spring.datasource.username", postgres::getUsername);
+    registry.add("spring.datasource.password", postgres::getPassword);
+  }
+
 
   @Autowired
   private IApprovalRequestRepository repository;

@@ -18,6 +18,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -34,8 +35,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 class IngestPdfConductorWorkerIntegrationTest {
 
+    private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:16.3");
+
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
 
     private static HttpServer server;
     private static final AtomicInteger fetchCounter = new AtomicInteger(0);
