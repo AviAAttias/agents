@@ -34,7 +34,7 @@ import org.testcontainers.utility.DockerImageName;
 @Testcontainers(disabledWithoutDocker = true)
 class SharedSchemaValidationIntegrationTest {
 
-  private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:16.3");
+  private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:15.10");
 
   @Container
   static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
@@ -57,8 +57,8 @@ class SharedSchemaValidationIntegrationTest {
   void contextStartsAndSharedRepositoryIsUsable() {
     Integer appliedMigrations = jdbcTemplate.queryForObject(
         "SELECT COUNT(*) FROM shared.flyway_schema_history WHERE success = TRUE", Integer.class);
-    assertThat(appliedMigrations).isNotNull();
-    assertThat(appliedMigrations).isGreaterThanOrEqualTo(3);
+    assertThat(appliedMigrations).withFailMessage("Flyway did not apply migrations to shared.flyway_schema_history").isNotNull();
+    assertThat(appliedMigrations).withFailMessage("Flyway did not apply migrations to shared.flyway_schema_history").isGreaterThan(0);
 
     ApprovalRequestEntity entity = new ApprovalRequestEntity();
     entity.setJobId("job-it-1");

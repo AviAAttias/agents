@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 class IngestPdfConductorWorkerIntegrationTest {
 
-    private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:16.3");
+    private static final DockerImageName POSTGRES_IMAGE = DockerImageName.parse("postgres:15.10");
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(POSTGRES_IMAGE);
