@@ -1,6 +1,3 @@
-CREATE SCHEMA IF NOT EXISTS shared;
-SET SCHEMA shared;
-
 CREATE TABLE IF NOT EXISTS shared.approval_request (
     id BIGSERIAL PRIMARY KEY,
     job_id VARCHAR(255) NOT NULL,
